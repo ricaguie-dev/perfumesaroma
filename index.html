@@ -222,6 +222,7 @@ tr:last-child td{border-bottom:none;}
       <button class="nav-item" data-view="inventario"><i class="ti ti-flask"></i><span>Inventario</span></button>
       <button class="nav-item" data-view="catalogo"><i class="ti ti-list-details"></i><span>Catálogo</span></button>
       <button class="nav-item" data-view="pedidos"><i class="ti ti-clipboard-list"></i><span>Pedidos</span></button>
+      <button class="nav-item" data-view="costos"><i class="ti ti-receipt-2"></i><span>Costos</span></button>
       <button class="nav-item" data-view="caja"><i class="ti ti-cash-banknote"></i><span>Caja</span></button>
       <button class="nav-item" data-view="reportes"><i class="ti ti-chart-bar"></i><span>Reportes</span></button>
       <button class="nav-item" data-view="config"><i class="ti ti-settings"></i><span>Configuración</span></button>
@@ -235,6 +236,7 @@ tr:last-child td{border-bottom:none;}
     <div class="view" id="view-inventario"></div>
     <div class="view" id="view-catalogo"></div>
     <div class="view" id="view-pedidos"></div>
+    <div class="view" id="view-costos"></div>
     <div class="view" id="view-caja"></div>
     <div class="view" id="view-reportes"></div>
     <div class="view" id="view-config"></div>
@@ -260,7 +262,8 @@ const defaultState = {
   perfumes: [],
   ventas: [],
   turnos: [],
-  pedidos: []
+  pedidos: [],
+  costos: []
 };
 
 function loadState(){
@@ -322,7 +325,7 @@ async function sbPush(){
   const id = state.config.cloud.workspaceId || 'default';
   const payload = {
     id,
-    data: { perfumes: state.perfumes, ventas: state.ventas, turnos: state.turnos, pedidos: state.pedidos,
+    data: { perfumes: state.perfumes, ventas: state.ventas, turnos: state.turnos, pedidos: state.pedidos, costos: state.costos,
       config: { nombreNegocio: state.config.nombreNegocio, logo: state.config.logo, colorAcento: state.config.colorAcento } },
     updated_at: new Date().toISOString()
   };
@@ -340,6 +343,7 @@ function applyRemoteData(data){
   state.ventas = data.ventas || [];
   state.turnos = data.turnos || [];
   state.pedidos = data.pedidos || [];
+  state.costos = data.costos || [];
   if(data.config){
     state.config.nombreNegocio = data.config.nombreNegocio || state.config.nombreNegocio;
     state.config.logo = data.config.logo || state.config.logo;
@@ -522,6 +526,7 @@ const renderers = {
   inventario: renderInventario,
   catalogo: renderCatalogo,
   pedidos: renderPedidos,
+  costos: renderCostos,
   caja: renderCaja,
   reportes: renderReportes,
   config: renderConfig
@@ -649,7 +654,15 @@ function miniPerfumeCard(p){
 /* ============================================================
    VENTA (PUNTO DE VENTA)
 ============================================================ */
-let ventaState = { perfumeId: null, tipo: '5ml', mlCustom: 5, metodoPago: 'efectivo', recibido: '' };
+let ventaState = { perfumeId: null, tipo: '5ml', mlCustom: 5, precioCustom: undefined, metodoPago: 'efectivo', recibido: '' };
+let ventaCart = [];
+
+function mlReservadoEnCarrito(perfumeId){
+  return ventaCart.filter(it=>it.perfumeId===perfumeId).reduce((s,it)=>s+it.ml,0);
+}
+function disponible(p){
+  return Math.max(0, +(p.mlRestantes - mlReservadoEnCarrito(p.id)).toFixed(2));
+}
 
 function renderVenta(){
   const el = document.getElementById('view-venta');
@@ -678,9 +691,10 @@ function renderVenta(){
   }
 
   if(!ventaState.perfumeId || !state.perfumes.find(p=>p.id===ventaState.perfumeId)){
-    ventaState.perfumeId = state.perfumes.find(p=>p.mlRestantes>0)?.id || state.perfumes[0].id;
+    ventaState.perfumeId = state.perfumes.find(p=>disponible(p)>0)?.id || state.perfumes[0].id;
   }
   const p = state.perfumes.find(x=>x.id===ventaState.perfumeId);
+  const disp = disponible(p);
 
   el.innerHTML = `
     <div class="page-head">
@@ -690,8 +704,10 @@ function renderVenta(){
       <div>
         <div class="section-title">1. Elige el perfume</div>
         <div class="grid grid-3" id="ventaPerfumeGrid" style="grid-template-columns:repeat(3,1fr);">
-          ${state.perfumes.map(pf=>`
-            <button class="perfume-card" data-pid="${pf.id}" style="text-align:left;border:1.5px solid ${pf.id===p.id?'var(--gold)':'var(--border)'};${pf.mlRestantes<=0?'opacity:.45;':''}" ${pf.mlRestantes<=0?'disabled':''}>
+          ${state.perfumes.map(pf=>{
+            const dpf = disponible(pf);
+            return `
+            <button class="perfume-card" data-pid="${pf.id}" style="text-align:left;border:1.5px solid ${pf.id===p.id?'var(--gold)':'var(--border)'};${dpf<=0?'opacity:.45;':''}" ${dpf<=0?'disabled':''}>
               <div class="perfume-top">
                 ${photoThumb(pf,30)}
                 ${bottleGauge(pf,24)}
@@ -700,29 +716,30 @@ function renderVenta(){
                   <div class="perfume-brand">${pf.marca||''}</div>
                 </div>
               </div>
-              <div class="perfume-meta"><span class="perfume-ml">${ml(pf.mlRestantes)} disp.</span>${categoryTag(pf.categoria)}</div>
-            </button>`).join('')}
+              <div class="perfume-meta"><span class="perfume-ml">${ml(dpf)} disp.</span>${categoryTag(pf.categoria)}</div>
+            </button>`;}).join('')}
         </div>
 
         <div class="section-title">2. Tipo de venta</div>
         <div class="card">
           <div class="radio-row" id="tipoVentaRow">
-            <button class="radio-chip ${ventaState.tipo==='5ml'?'selected':''}" data-tipo="5ml" ${p.mlRestantes<5?'disabled':''}>5 ml — ${money(p.precio5ml)}</button>
-            <button class="radio-chip ${ventaState.tipo==='10ml'?'selected':''}" data-tipo="10ml" ${p.mlRestantes<10?'disabled':''}>10 ml — ${money(p.precio10ml)}</button>
-            <button class="radio-chip ${ventaState.tipo==='completa'?'selected':''}" data-tipo="completa">Botella completa — ${money(p.precioBotella)}</button>
-            <button class="radio-chip ${ventaState.tipo==='custom'?'selected':''}" data-tipo="custom">Cantidad personalizada</button>
+            <button class="radio-chip ${ventaState.tipo==='5ml'?'selected':''}" data-tipo="5ml" ${disp<5?'disabled':''}>5 ml — ${money(p.precio5ml)}</button>
+            <button class="radio-chip ${ventaState.tipo==='10ml'?'selected':''}" data-tipo="10ml" ${disp<10?'disabled':''}>10 ml — ${money(p.precio10ml)}</button>
+            <button class="radio-chip ${ventaState.tipo==='completa'?'selected':''}" data-tipo="completa" ${disp<=0?'disabled':''}>Botella completa — ${money(p.precioBotella)}</button>
+            <button class="radio-chip ${ventaState.tipo==='custom'?'selected':''}" data-tipo="custom" ${disp<=0?'disabled':''}>Cantidad personalizada</button>
           </div>
           ${ventaState.tipo==='custom' ? `
           <div class="field-row" style="margin-top:14px;">
             <div class="field" style="margin-bottom:0;">
               <label>Mililitros</label>
-              <input type="number" id="mlCustomInput" min="1" max="${p.mlRestantes}" value="${ventaState.mlCustom}">
+              <input type="number" id="mlCustomInput" min="1" max="${disp}" value="${ventaState.mlCustom}">
             </div>
             <div class="field" style="margin-bottom:0;">
               <label>Precio total</label>
-              <input type="number" id="precioCustomInput" min="0" step="0.5" value="${(precioPorMl(p) * ventaState.mlCustom).toFixed(2)}">
+              <input type="number" id="precioCustomInput" min="0" step="0.5" value="${(ventaState.precioCustom !== undefined ? ventaState.precioCustom : precioPorMl(p) * ventaState.mlCustom).toFixed(2)}">
             </div>
           </div>` : ''}
+          <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:14px;" id="btnAgregarCarrito"><i class="ti ti-shopping-cart-plus"></i> Agregar al carrito</button>
         </div>
 
         <div class="section-title">3. Método de pago</div>
@@ -740,28 +757,29 @@ function renderVenta(){
       </div>
 
       <div>
-        <div class="section-title">Resumen</div>
+        <div class="section-title">Carrito · ${ventaCart.length} producto(s)</div>
         <div class="card" id="resumenVenta"></div>
       </div>
     </div>
   `;
 
-  // wire perfume selector
   el.querySelectorAll('#ventaPerfumeGrid [data-pid]').forEach(btn=>{
-    btn.onclick = ()=>{ ventaState.perfumeId = btn.dataset.pid; ventaState.tipo='5ml'; ventaState.recibido=''; renderVenta(); };
+    btn.onclick = ()=>{ ventaState.perfumeId = btn.dataset.pid; ventaState.tipo='5ml'; ventaState.precioCustom=undefined; renderVenta(); };
   });
   el.querySelectorAll('#tipoVentaRow [data-tipo]').forEach(btn=>{
-    btn.onclick = ()=>{ ventaState.tipo = btn.dataset.tipo; if(btn.dataset.tipo==='custom'){ ventaState.mlCustom = Math.min(5, p.mlRestantes); } renderVenta(); };
+    if(btn.disabled) return;
+    btn.onclick = ()=>{ ventaState.tipo = btn.dataset.tipo; ventaState.precioCustom=undefined; if(btn.dataset.tipo==='custom'){ ventaState.mlCustom = Math.min(5, disponible(p)); } renderVenta(); };
   });
   el.querySelectorAll('[data-pago]').forEach(btn=>{
     btn.onclick = ()=>{ ventaState.metodoPago = btn.dataset.pago; renderVenta(); };
   });
   const mlCustomInput = document.getElementById('mlCustomInput');
-  if(mlCustomInput) mlCustomInput.oninput = (e)=>{ ventaState.mlCustom = Number(e.target.value)||0; renderResumen(); };
+  if(mlCustomInput) mlCustomInput.oninput = (e)=>{ ventaState.mlCustom = Number(e.target.value)||0; ventaState.precioCustom = undefined; renderResumen(); };
   const precioCustomInput = document.getElementById('precioCustomInput');
   if(precioCustomInput) precioCustomInput.oninput = (e)=>{ ventaState.precioCustom = Number(e.target.value)||0; renderResumen(); };
   const recibidoInput = document.getElementById('recibidoInput');
   if(recibidoInput) recibidoInput.oninput = (e)=>{ ventaState.recibido = e.target.value; renderResumen(); };
+  document.getElementById('btnAgregarCarrito').onclick = agregarAlCarrito;
 
   renderResumen();
 }
@@ -772,80 +790,168 @@ function precioPorMl(p){
   return 0;
 }
 
-function calcularVenta(){
+function itemActualParaAgregar(){
   const p = state.perfumes.find(x=>x.id===ventaState.perfumeId);
   if(!p) return null;
+  const disp = disponible(p);
   let mlVendidos, total, tipoLabel;
   if(ventaState.tipo==='5ml'){ mlVendidos=5; total=p.precio5ml; tipoLabel='Decant 5 ml'; }
   else if(ventaState.tipo==='10ml'){ mlVendidos=10; total=p.precio10ml; tipoLabel='Decant 10 ml'; }
-  else if(ventaState.tipo==='completa'){ mlVendidos=p.mlRestantes; total=p.precioBotella; tipoLabel='Botella completa'; }
+  else if(ventaState.tipo==='completa'){ mlVendidos=disp; total=p.precioBotella; tipoLabel='Botella completa'; }
   else { mlVendidos=ventaState.mlCustom; total = ventaState.precioCustom !== undefined ? ventaState.precioCustom : precioPorMl(p)*ventaState.mlCustom; tipoLabel=`Personalizado (${mlVendidos} ml)`; }
+  const stockValido = mlVendidos > 0 && mlVendidos <= disp;
+  return {p, mlVendidos, total, tipoLabel, stockValido};
+}
+
+function agregarAlCarrito(){
+  const it = itemActualParaAgregar();
+  if(!it){ return; }
+  if(!it.stockValido){ toast('No hay suficiente stock disponible para agregar eso', 'err'); return; }
+  if(it.total<=0){ toast('El precio debe ser mayor a cero', 'err'); return; }
+  ventaCart.push({
+    itemId: uid('item'),
+    perfumeId: it.p.id,
+    perfumeNombre: it.p.nombre,
+    tipo: it.tipoLabel,
+    ml: it.mlVendidos,
+    total: it.total
+  });
+  toast(`${it.p.nombre} agregado al carrito`, 'ok');
+  ventaState.tipo = '5ml';
+  ventaState.precioCustom = undefined;
+  renderVenta();
+}
+
+function quitarDelCarrito(itemId){
+  ventaCart = ventaCart.filter(it=>it.itemId!==itemId);
+  renderVenta();
+}
+
+function calcularCarrito(){
+  const total = ventaCart.reduce((s,it)=>s+it.total,0);
   const recibido = Number(ventaState.recibido)||0;
   const cambio = ventaState.metodoPago==='efectivo' ? Math.max(0, recibido - total) : 0;
   const alcanza = ventaState.metodoPago==='efectivo' ? recibido >= total : true;
-  const stockValido = mlVendidos > 0 && mlVendidos <= p.mlRestantes;
-  return {p, mlVendidos, total, tipoLabel, recibido, cambio, alcanza, stockValido};
+  return {total, recibido, cambio, alcanza};
 }
 
 function renderResumen(){
   const box = document.getElementById('resumenVenta');
   if(!box) return;
-  const c = calcularVenta();
-  if(!c){ box.innerHTML = '<p class="muted">Selecciona un perfume.</p>'; return; }
-  const {p, mlVendidos, total, tipoLabel, recibido, cambio, alcanza, stockValido} = c;
+
+  if(!ventaCart.length){
+    box.innerHTML = `<div class="empty" style="padding:26px 10px;"><i class="ti ti-shopping-cart" style="font-size:28px;color:var(--gold-soft);"></i><p class="muted" style="margin-top:8px;font-size:13px;">Agrega uno o varios perfumes al carrito para cobrar todo junto.</p></div>`;
+    return;
+  }
+
+  const {total, recibido, cambio, alcanza} = calcularCarrito();
 
   let warn = '';
-  if(!stockValido) warn = `<div class="banner danger" style="margin:0 0 14px;"><i class="ti ti-alert-triangle"></i> No hay suficiente stock (${ml(p.mlRestantes)} disponibles).</div>`;
-  else if(ventaState.metodoPago==='efectivo' && !alcanza && recibido>0) warn = `<div class="banner danger" style="margin:0 0 14px;"><i class="ti ti-alert-triangle"></i> El monto recibido no cubre el total.</div>`;
+  if(ventaState.metodoPago==='efectivo' && !alcanza && recibido>0) warn = `<div class="banner danger" style="margin:0 0 14px;"><i class="ti ti-alert-triangle"></i> El monto recibido no cubre el total.</div>`;
 
   box.innerHTML = `
     ${warn}
-    <div style="margin-bottom:6px;font-weight:700;">${p.nombre}</div>
-    <div class="muted" style="font-size:12.5px;margin-bottom:14px;">${tipoLabel}</div>
-    <div class="flex-between" style="margin-bottom:8px;"><span class="muted">Mililitros</span><span class="num">${ml(mlVendidos)}</span></div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+      ${ventaCart.map(it=>`
+        <div class="flex-between" style="gap:8px;">
+          <div style="min-width:0;">
+            <div style="font-weight:700;font-size:13.5px;">${it.perfumeNombre}</div>
+            <div class="muted" style="font-size:11.5px;">${it.tipo} · ${ml(it.ml)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+            <span class="num" style="font-weight:700;">${money(it.total)}</span>
+            <button class="btn-icon" data-quitar="${it.itemId}" style="width:26px;height:26px;" title="Quitar"><i class="ti ti-x" style="font-size:13px;"></i></button>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div class="divider"></div>
     <div class="flex-between" style="margin-bottom:8px;"><span class="muted">Total a cobrar</span><span class="qty-price" style="font-size:22px;">${money(total)}</span></div>
     ${ventaState.metodoPago==='efectivo' ? `
     <div class="divider"></div>
     <div class="flex-between" style="margin-bottom:8px;"><span class="muted">Recibido</span><span class="num">${money(recibido)}</span></div>
     <div class="flex-between"><span class="muted">Cambio</span><span class="num" style="font-weight:700;color:var(--success);">${money(cambio)}</span></div>
     ` : `<div class="banner" style="margin-top:10px;"><i class="ti ti-building-bank"></i> Se registrará como transferencia.</div>`}
-    <button class="btn btn-gold" style="width:100%;justify-content:center;margin-top:18px;" id="btnConfirmarVenta" ${(!stockValido || (ventaState.metodoPago==='efectivo' && !alcanza) || total<=0)?'disabled':''}>
-      <i class="ti ti-check"></i> Confirmar venta
+    <button class="btn btn-gold" style="width:100%;justify-content:center;margin-top:18px;" id="btnConfirmarVenta" ${((ventaState.metodoPago==='efectivo' && !alcanza) || total<=0)?'disabled':''}>
+      <i class="ti ti-check"></i> Cobrar carrito
     </button>
   `;
+  box.querySelectorAll('[data-quitar]').forEach(btn=>{
+    btn.onclick = ()=>quitarDelCarrito(btn.dataset.quitar);
+  });
   const btn = document.getElementById('btnConfirmarVenta');
   if(btn) btn.onclick = confirmarVenta;
 }
 
 function confirmarVenta(){
-  const c = calcularVenta();
-  if(!c || !c.stockValido) return;
+  if(!ventaCart.length) return;
   const turno = turnoAbierto();
   if(!turno){ toast('No hay un turno abierto.', 'err'); return; }
-  const {p, mlVendidos, total, tipoLabel, recibido, cambio} = c;
+  const {total, recibido, cambio} = calcularCarrito();
 
-  p.mlRestantes = Math.max(0, +(p.mlRestantes - mlVendidos).toFixed(2));
+  // valida stock una última vez por perfume (suma de todo lo reservado en el carrito)
+  const totalesPorPerfume = {};
+  ventaCart.forEach(it=>{ totalesPorPerfume[it.perfumeId] = (totalesPorPerfume[it.perfumeId]||0) + it.ml; });
+  for(const pid in totalesPorPerfume){
+    const p = state.perfumes.find(x=>x.id===pid);
+    if(!p || totalesPorPerfume[pid] > p.mlRestantes){
+      toast('El stock cambió mientras armabas el carrito. Revisa las cantidades.', 'err');
+      renderVenta();
+      return;
+    }
+  }
 
-  state.ventas.push({
-    id: uid('venta'),
-    fecha: todayStr(),
-    hora: new Date().toISOString(),
-    turnoId: turno.id,
-    perfumeId: p.id,
-    perfumeNombre: p.nombre,
-    tipo: tipoLabel,
-    ml: mlVendidos,
-    total: total,
-    metodoPago: ventaState.metodoPago,
-    recibido: ventaState.metodoPago==='efectivo' ? recibido : total,
-    cambio: cambio
+  const grupoId = uid('grupo');
+  ventaCart.forEach(it=>{
+    const p = state.perfumes.find(x=>x.id===it.perfumeId);
+    p.mlRestantes = Math.max(0, +(p.mlRestantes - it.ml).toFixed(2));
+    state.ventas.push({
+      id: uid('venta'),
+      fecha: todayStr(),
+      hora: new Date().toISOString(),
+      turnoId: turno.id,
+      ventaGrupoId: grupoId,
+      perfumeId: it.perfumeId,
+      perfumeNombre: it.perfumeNombre,
+      tipo: it.tipo,
+      ml: it.ml,
+      total: it.total,
+      metodoPago: ventaState.metodoPago,
+      recibido: ventaState.metodoPago==='efectivo' ? recibido : total,
+      cambio: cambio
+    });
   });
 
   saveState();
-  toast(`Venta registrada: ${p.nombre} · ${money(total)}`, 'ok');
+  toast(`Venta registrada: ${ventaCart.length} producto(s) · ${money(total)}`, 'ok');
+  ventaCart = [];
   ventaState.recibido = '';
   ventaState.tipo = '5ml';
+  ventaState.precioCustom = undefined;
   renderVenta();
+}
+
+/* ============================================================
+   COSTOS OPERATIVOS Y MARGEN REAL
+============================================================ */
+function totalCostosPorTipo(tipo){
+  return state.costos.filter(c=>c.tipo===tipo).reduce((s,c)=>s+c.monto,0);
+}
+function mesActualStr(){
+  return todayStr().slice(0,7);
+}
+function mlVendidosDelMes(mes){
+  mes = mes || mesActualStr();
+  return state.ventas.filter(v=>v.fecha.slice(0,7)===mes).reduce((s,v)=>s+v.ml,0);
+}
+// Reparte los costos fijos mensuales entre lo vendido este mes (ml), y suma
+// los costos variables por venta (empaque, etiquetas, etc.) a cada transacción.
+function costoOperativoPorMl(){
+  const ml = mlVendidosDelMes();
+  const fijos = totalCostosPorTipo('fijo');
+  return ml > 0 ? fijos / ml : 0;
+}
+function costoVariablePorVenta(){
+  return totalCostosPorTipo('variable');
 }
 
 /* ============================================================
@@ -853,30 +959,40 @@ function confirmarVenta(){
 ============================================================ */
 function gananciaDePerfume(p){
   const ventasP = state.ventas.filter(v=>v.perfumeId===p.id);
-  const costoPorMl = p.mlTotal ? (p.costoBotella / p.mlTotal) : 0;
-  let ingresos = 0, costo = 0;
-  ventasP.forEach(v=>{ ingresos += v.total; costo += costoPorMl * v.ml; });
-  const ganancia = ingresos - costo;
-  const margen = ingresos > 0 ? (ganancia / ingresos * 100) : 0;
-  return {ingresos, costo, ganancia, margen, numVentas: ventasP.length};
+  const costoDirectoPorMl = p.mlTotal ? (p.costoBotella / p.mlTotal) : 0;
+  const opPorMl = costoOperativoPorMl();
+  const varPorVenta = costoVariablePorVenta();
+  let ingresos = 0, costoDirecto = 0, costoOperativo = 0;
+  ventasP.forEach(v=>{
+    ingresos += v.total;
+    costoDirecto += costoDirectoPorMl * v.ml;
+    costoOperativo += (opPorMl * v.ml) + varPorVenta;
+  });
+  const gananciaBruta = ingresos - costoDirecto;
+  const gananciaNeta = ingresos - costoDirecto - costoOperativo;
+  const margenBruto = ingresos > 0 ? (gananciaBruta / ingresos * 100) : 0;
+  const margenNeto = ingresos > 0 ? (gananciaNeta / ingresos * 100) : 0;
+  return {ingresos, costoDirecto, costoOperativo, gananciaBruta, gananciaNeta, margenBruto, margenNeto, numVentas: ventasP.length};
 }
 
 function renderInventario(){
   const el = document.getElementById('view-inventario');
   const bajos = state.perfumes.filter(p=>p.mlRestantes<=p.mlMinimo);
-  const gananciaTotal = state.perfumes.reduce((s,p)=>s+gananciaDePerfume(p).ganancia, 0);
+  const gananciaTotal = state.perfumes.reduce((s,p)=>s+gananciaDePerfume(p).gananciaNeta, 0);
   const ingresoTotal = state.perfumes.reduce((s,p)=>s+gananciaDePerfume(p).ingresos, 0);
+  const sinCostos = state.costos.length === 0;
 
   el.innerHTML = `
     <div class="page-head">
       <div><div class="eyebrow">Inventario</div><h1>Existencias por botella</h1><p>Se descuenta automáticamente con cada venta.</p></div>
     </div>
     ${bajos.length ? `<div class="banner danger"><i class="ti ti-alert-triangle"></i><div><strong>${bajos.length} perfume(s) necesitan reabasto:</strong> ${bajos.map(p=>p.nombre).join(', ')}.</div></div>` : ''}
+    ${sinCostos ? `<div class="banner"><i class="ti ti-info-circle"></i><div>Aún no has agregado tus <strong>costos de operación</strong> (renta, empaque, transporte, etc.). La ganancia de abajo solo resta el costo de la botella — agrégalos en <strong>Costos</strong> para ver el margen real.</div></div>` : ''}
     ${state.perfumes.length ? `
     <div class="grid grid-3" style="margin-bottom:22px;">
-      <div class="stat accent"><div class="label">Ganancia acumulada</div><div class="value">${money(gananciaTotal)}</div><div class="sub">de todo tu inventario vendido</div></div>
+      <div class="stat accent"><div class="label">Ganancia neta acumulada</div><div class="value">${money(gananciaTotal)}</div><div class="sub">ya descontando costos de operación</div></div>
       <div class="stat"><div class="label">Ingresos por decants</div><div class="value">${money(ingresoTotal)}</div></div>
-      <div class="stat"><div class="label">Margen promedio</div><div class="value">${ingresoTotal>0 ? (gananciaTotal/ingresoTotal*100).toFixed(1) : '0.0'}%</div></div>
+      <div class="stat"><div class="label">Margen neto promedio</div><div class="value">${ingresoTotal>0 ? (gananciaTotal/ingresoTotal*100).toFixed(1) : '0.0'}%</div></div>
     </div>
     <div class="grid grid-3">
       ${state.perfumes.slice().sort((a,b)=>(a.mlRestantes/a.mlTotal)-(b.mlRestantes/b.mlTotal)).map(p=>{
@@ -905,12 +1021,16 @@ function renderInventario(){
         <div class="flex-between">${stockTag(p)}<span class="muted" style="font-size:11.5px;">${p.proveedor ? 'Prov: '+p.proveedor : ''}</span></div>
         <div class="divider"></div>
         <div class="flex-between" style="margin-bottom:4px;">
-          <span class="muted" style="font-size:12.5px;">Ganancia generada</span>
-          <span class="num" style="font-weight:700;color:${g.ganancia<0?'var(--danger)':'var(--success)'};">${money(g.ganancia)}</span>
+          <span class="muted" style="font-size:12.5px;">Ganancia neta (real)</span>
+          <span class="num" style="font-weight:700;color:${g.gananciaNeta<0?'var(--danger)':'var(--success)'};">${money(g.gananciaNeta)}</span>
+        </div>
+        <div class="flex-between" style="margin-bottom:4px;">
+          <span class="muted" style="font-size:12.5px;">Margen neto · ventas</span>
+          <span class="num">${g.margenNeto.toFixed(1)}% · ${g.numVentas}</span>
         </div>
         <div class="flex-between">
-          <span class="muted" style="font-size:12.5px;">Margen · ventas</span>
-          <span class="num">${g.margen.toFixed(1)}% · ${g.numVentas}</span>
+          <span class="muted" style="font-size:11px;">Ganancia bruta (sin operativos)</span>
+          <span class="num muted" style="font-size:11px;">${money(g.gananciaBruta)}</span>
         </div>
         <div class="divider"></div>
         <div style="display:flex;gap:8px;">
@@ -1304,6 +1424,152 @@ function openPedidoModal(pedido){
 }
 
 /* ============================================================
+   COSTOS (gastos de operación)
+============================================================ */
+const categoriasCosto = ['Renta','Empaque y etiquetas','Transporte','Marketing','Herramientas y software','Insumos','Otro'];
+
+function renderCostos(){
+  const el = document.getElementById('view-costos');
+  const costos = state.costos.slice().sort((a,b)=> new Date(b.fecha) - new Date(a.fecha));
+  const fijos = costos.filter(c=>c.tipo==='fijo');
+  const variables = costos.filter(c=>c.tipo==='variable');
+  const unicos = costos.filter(c=>c.tipo==='unico');
+  const totalFijos = fijos.reduce((s,c)=>s+c.monto,0);
+  const totalVariable = variables.reduce((s,c)=>s+c.monto,0);
+  const totalUnicos = unicos.reduce((s,c)=>s+c.monto,0);
+  const mlMes = mlVendidosDelMes();
+
+  // Resumen general de rentabilidad de todo el negocio (decants)
+  let ingresos=0, costoDirecto=0, costoOperativo=0;
+  state.perfumes.forEach(p=>{
+    const g = gananciaDePerfume(p);
+    ingresos += g.ingresos; costoDirecto += g.costoDirecto; costoOperativo += g.costoOperativo;
+  });
+  const gananciaNetaTotal = ingresos - costoDirecto - costoOperativo;
+  const margenNetoTotal = ingresos>0 ? (gananciaNetaTotal/ingresos*100) : 0;
+
+  el.innerHTML = `
+    <div class="page-head">
+      <div><div class="eyebrow">Costos</div><h1>Gastos de operación</h1><p>Renta, empaque, transporte y todo lo que cuesta operar, más allá del costo de cada botella.</p></div>
+      <button class="btn btn-gold" id="btnNuevoCosto"><i class="ti ti-plus"></i> Agregar costo</button>
+    </div>
+
+    <div class="grid grid-3" style="margin-bottom:22px;">
+      <div class="stat"><div class="label">Fijos mensuales</div><div class="value">${money(totalFijos)}</div><div class="sub">se reparten entre lo vendido cada mes</div></div>
+      <div class="stat"><div class="label">Variables por venta</div><div class="value">${money(totalVariable)}</div><div class="sub">se suman a cada decant vendido</div></div>
+      <div class="stat"><div class="label">Pagos únicos (histórico)</div><div class="value">${money(totalUnicos)}</div><div class="sub">no afectan el margen por producto</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;background:var(--ink);color:var(--cream);border-color:var(--ink);">
+      <div class="eyebrow" style="color:var(--gold-soft);">Rentabilidad real del negocio</div>
+      <div class="grid grid-3" style="margin-top:10px;">
+        <div><div style="font-size:11.5px;color:rgba(247,242,234,.6);margin-bottom:4px;">Ingresos por decants</div><div class="qty-price" style="font-size:22px;">${money(ingresos)}</div></div>
+        <div><div style="font-size:11.5px;color:rgba(247,242,234,.6);margin-bottom:4px;">Costo directo + operativo</div><div class="qty-price" style="font-size:22px;">${money(costoDirecto+costoOperativo)}</div></div>
+        <div><div style="font-size:11.5px;color:var(--gold-soft);margin-bottom:4px;">Ganancia neta real</div><div class="qty-price" style="font-size:22px;color:${gananciaNetaTotal<0?'#e08b85':'var(--gold-soft)'};">${money(gananciaNetaTotal)} · ${margenNetoTotal.toFixed(1)}%</div></div>
+      </div>
+      <div class="hint" style="color:rgba(247,242,234,.5);margin-top:10px;">Con base en ${ml(mlMes)} vendidos este mes para repartir tus costos fijos.</div>
+    </div>
+
+    ${costos.length ? `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Concepto</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Fecha</th><th></th></tr></thead>
+        <tbody>
+        ${costos.map(c=>`<tr>
+          <td style="font-weight:700;">${c.concepto}</td>
+          <td>${c.categoria}</td>
+          <td><span class="tag ${c.tipo==='fijo'?'tag-unisex':c.tipo==='variable'?'tag-hombre':'tag-mujer'}">${c.tipo==='fijo'?'Fijo mensual':c.tipo==='variable'?'Variable por venta':'Pago único'}</span></td>
+          <td class="num" style="font-weight:700;">${money(c.monto)}</td>
+          <td>${fmtDate(c.fecha)}</td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-icon" data-editc="${c.id}" title="Editar"><i class="ti ti-pencil"></i></button>
+              <button class="btn-icon" data-delc="${c.id}" title="Eliminar"><i class="ti ti-trash"></i></button>
+            </div>
+          </td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : `<div class="empty card"><i class="ti ti-receipt-2"></i><h3>Aún no registras costos de operación</h3><p>Agrega renta, empaque, transporte, etc. para ver tu margen real por producto.</p></div>`}
+  `;
+  document.getElementById('btnNuevoCosto').onclick = ()=>openCostoModal();
+  el.querySelectorAll('[data-editc]').forEach(b=>b.onclick=()=>openCostoModal(state.costos.find(c=>c.id===b.dataset.editc)));
+  el.querySelectorAll('[data-delc]').forEach(b=>b.onclick=()=>{
+    const c = state.costos.find(x=>x.id===b.dataset.delc);
+    if(confirm(`¿Eliminar el costo "${c.concepto}"?`)){
+      state.costos = state.costos.filter(x=>x.id!==c.id);
+      saveState(); renderCostos();
+      toast('Costo eliminado', 'ok');
+    }
+  });
+}
+
+function openCostoModal(costo){
+  const editing = !!costo;
+  const c = costo || {id:null, concepto:'', categoria:categoriasCosto[0], tipo:'fijo', monto:0, fecha:todayStr(), notas:''};
+  showModal(`
+    <div class="modal-head"><h3>${editing?'Editar':'Agregar'} costo</h3><button class="modal-close" id="mClose">&times;</button></div>
+    <div class="field"><label>Concepto</label><input id="coConcepto" value="${c.concepto}" placeholder="Ej. Renta del local, cajas para envío..."></div>
+    <div class="field"><label>Categoría</label>
+      <select id="coCategoria">${categoriasCosto.map(cat=>`<option value="${cat}" ${c.categoria===cat?'selected':''}>${cat}</option>`).join('')}</select>
+    </div>
+    <div class="field">
+      <label>Tipo de costo</label>
+      <div class="radio-row" id="coTipoRow">
+        <button type="button" class="radio-chip ${c.tipo==='fijo'?'selected':''}" data-tipo="fijo">Fijo mensual</button>
+        <button type="button" class="radio-chip ${c.tipo==='variable'?'selected':''}" data-tipo="variable">Variable por venta</button>
+        <button type="button" class="radio-chip ${c.tipo==='unico'?'selected':''}" data-tipo="unico">Pago único</button>
+      </div>
+      <div class="hint" id="coTipoHint" style="margin-top:8px;"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Monto</label><input type="number" id="coMonto" min="0" step="0.5" value="${c.monto}"></div>
+      <div class="field"><label>Fecha</label><input type="date" id="coFecha" value="${c.fecha}"></div>
+    </div>
+    <div class="field"><label>Notas (opcional)</label><input id="coNotas" value="${c.notas||''}"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="mCancel">Cancelar</button>
+      <button class="btn btn-gold" id="mSave"><i class="ti ti-check"></i> Guardar</button>
+    </div>
+  `);
+  let tipoSel = c.tipo;
+  const hints = {
+    fijo: 'Se reparte automáticamente entre los mililitros vendidos cada mes (ej. renta, luz, internet).',
+    variable: 'Se suma como costo extra a cada decant vendido (ej. bolsita, etiqueta, frasquito).',
+    unico: 'Se registra como gasto, pero no afecta el margen calculado por producto (ej. compra de báscula, mobiliario).'
+  };
+  function actualizarHint(){ document.getElementById('coTipoHint').textContent = hints[tipoSel]; }
+  actualizarHint();
+  document.querySelectorAll('#coTipoRow [data-tipo]').forEach(btn=>{
+    btn.onclick = ()=>{
+      tipoSel = btn.dataset.tipo;
+      document.querySelectorAll('#coTipoRow [data-tipo]').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      actualizarHint();
+    };
+  });
+  document.getElementById('mSave').onclick = ()=>{
+    const concepto = document.getElementById('coConcepto').value.trim();
+    if(!concepto){ toast('El concepto es obligatorio', 'err'); return; }
+    const data = {
+      id: c.id || uid('costo'),
+      concepto,
+      categoria: document.getElementById('coCategoria').value,
+      tipo: tipoSel,
+      monto: Number(document.getElementById('coMonto').value)||0,
+      fecha: document.getElementById('coFecha').value || todayStr(),
+      notas: document.getElementById('coNotas').value.trim()
+    };
+    if(editing){ Object.assign(costo, data); } else { state.costos.push(data); }
+    saveState();
+    closeModal();
+    toast(editing?'Costo actualizado':'Costo agregado', 'ok');
+    renderCostos();
+  };
+  wireModalClose();
+}
+
+/* ============================================================
    CAJA (TURNOS)
 ============================================================ */
 function renderCaja(){
@@ -1405,6 +1671,7 @@ function renderCaja(){
 /* ============================================================
    REPORTES
 ============================================================ */
+let reportesFiltro = { desde: '', hasta: '', perfumeId: 'todos' };
 function renderReportes(){
   const el = document.getElementById('view-reportes');
 
@@ -1421,15 +1688,25 @@ function renderReportes(){
   const totalGeneral = state.ventas.reduce((s,v)=>s+v.total,0);
   const mlTotalVendidos = state.ventas.reduce((s,v)=>s+v.ml,0);
 
-  // más vendidos
-  const porPerfume = {};
-  state.ventas.forEach(v=>{
-    porPerfume[v.perfumeNombre] = porPerfume[v.perfumeNombre] || {ml:0, total:0, ventas:0};
-    porPerfume[v.perfumeNombre].ml += v.ml;
-    porPerfume[v.perfumeNombre].total += v.total;
-    porPerfume[v.perfumeNombre].ventas += 1;
+  // más vendidos — con margen neto real por perfume
+  const topPerfumes = state.perfumes
+    .map(p=>({p, g: gananciaDePerfume(p)}))
+    .filter(x=>x.g.numVentas>0)
+    .sort((a,b)=>b.g.ingresos-a.g.ingresos)
+    .slice(0,6);
+
+  // consulta filtrada por fecha / producto
+  const filtradas = state.ventas.filter(v=>{
+    if(reportesFiltro.desde && v.fecha < reportesFiltro.desde) return false;
+    if(reportesFiltro.hasta && v.fecha > reportesFiltro.hasta) return false;
+    if(reportesFiltro.perfumeId !== 'todos' && v.perfumeId !== reportesFiltro.perfumeId) return false;
+    return true;
   });
-  const topPerfumes = Object.entries(porPerfume).sort((a,b)=>b[1].total-a[1].total).slice(0,6);
+  const ingresosFiltrados = filtradas.reduce((s,v)=>s+v.total,0);
+  const mlFiltrados = filtradas.reduce((s,v)=>s+v.ml,0);
+  const porDia = {};
+  filtradas.forEach(v=>{ (porDia[v.fecha] = porDia[v.fecha] || []).push(v); });
+  const diasConVentas = Object.keys(porDia).sort((a,b)=> new Date(b) - new Date(a));
 
   el.innerHTML = `
     <div class="page-head"><div><div class="eyebrow">Reportes</div><h1>Desempeño de tu negocio</h1></div></div>
@@ -1452,12 +1729,68 @@ function renderReportes(){
       </div>
     </div>
 
-    <div class="grid grid-2" style="grid-template-columns:1fr 1fr;align-items:start;">
+    <div class="section-title">Consultar por fecha y producto</div>
+    <div class="card" style="margin-bottom:20px;">
+      <div class="field-row">
+        <div class="field" style="margin-bottom:0;"><label>Desde</label><input type="date" id="repDesde" value="${reportesFiltro.desde}"></div>
+        <div class="field" style="margin-bottom:0;"><label>Hasta</label><input type="date" id="repHasta" value="${reportesFiltro.hasta}"></div>
+      </div>
+      <div class="field" style="margin-top:12px;margin-bottom:0;">
+        <label>Producto</label>
+        <select id="repProducto">
+          <option value="todos" ${reportesFiltro.perfumeId==='todos'?'selected':''}>Todos los perfumes</option>
+          ${state.perfumes.map(p=>`<option value="${p.id}" ${reportesFiltro.perfumeId===p.id?'selected':''}>${p.nombre}</option>`).join('')}
+        </select>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-outline btn-sm" id="repLimpiar"><i class="ti ti-x"></i> Limpiar filtro</button>
+      </div>
+    </div>
+
+    <div class="grid grid-3" style="margin-bottom:20px;">
+      <div class="stat accent"><div class="label">Ingresos en el rango</div><div class="value">${money(ingresosFiltrados)}</div><div class="sub">${filtradas.length} venta(s)</div></div>
+      <div class="stat"><div class="label">Mililitros vendidos</div><div class="value">${ml(mlFiltrados)}</div></div>
+      <div class="stat"><div class="label">Días con ventas</div><div class="value">${diasConVentas.length}</div></div>
+    </div>
+
+    ${diasConVentas.length ? diasConVentas.map(fecha=>{
+      const ventasDia = porDia[fecha].slice().sort((a,b)=> new Date(b.hora) - new Date(a.hora));
+      const totalDia = ventasDia.reduce((s,v)=>s+v.total,0);
+      const mlDia = ventasDia.reduce((s,v)=>s+v.ml,0);
+      return `
+      <div class="card" style="margin-bottom:14px;">
+        <div class="flex-between" style="margin-bottom:10px;">
+          <div style="font-weight:700;">${fmtDate(fecha)}</div>
+          <div class="num" style="font-weight:700;">${money(totalDia)} · ${ml(mlDia)}</div>
+        </div>
+        <table>
+          <thead><tr><th>Hora</th><th>Perfume</th><th>Tipo</th><th>ml</th><th>Pago</th><th>Total</th></tr></thead>
+          <tbody>
+            ${ventasDia.map(v=>`<tr>
+              <td>${fmtTime(v.hora)}</td>
+              <td>${v.perfumeNombre}</td>
+              <td class="muted" style="font-size:11.5px;">${v.tipo}</td>
+              <td class="num">${ml(v.ml)}</td>
+              <td><span class="pay-badge pay-${v.metodoPago}">${v.metodoPago==='efectivo'?'Efectivo':'Transferencia'}</span></td>
+              <td class="num" style="font-weight:700;">${money(v.total)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    }).join('') : `<div class="empty card" style="margin-bottom:24px;"><i class="ti ti-calendar-search"></i><h3>Sin ventas en ese filtro</h3><p>Prueba con otro rango de fechas o producto.</p></div>`}
+
+    <div class="grid grid-2" style="grid-template-columns:1fr 1fr;align-items:start;margin-top:6px;">
       <div>
-        <div class="section-title">Perfumes más vendidos</div>
+        <div class="section-title">Perfumes más vendidos · margen real</div>
         <div class="table-wrap">
-          <table><thead><tr><th>Perfume</th><th>ml vendidos</th><th>Ingresos</th></tr></thead>
-          <tbody>${topPerfumes.length ? topPerfumes.map(([nombre,d])=>`<tr><td>${nombre}</td><td class="num">${ml(d.ml)}</td><td class="num" style="font-weight:700;">${money(d.total)}</td></tr>`).join('') : `<tr><td colspan="3" class="center muted" style="padding:20px;">Sin ventas aún</td></tr>`}</tbody>
+          <table><thead><tr><th>Perfume</th><th>ml</th><th>Ingresos</th><th>Ganancia neta</th><th>Margen</th></tr></thead>
+          <tbody>${topPerfumes.length ? topPerfumes.map(({p,g})=>`<tr>
+            <td>${p.nombre}</td>
+            <td class="num">${ml(g.ingresos>0 ? state.ventas.filter(v=>v.perfumeId===p.id).reduce((s,v)=>s+v.ml,0) : 0)}</td>
+            <td class="num" style="font-weight:700;">${money(g.ingresos)}</td>
+            <td class="num" style="color:${g.gananciaNeta<0?'var(--danger)':'var(--success)'};">${money(g.gananciaNeta)}</td>
+            <td class="num">${g.margenNeto.toFixed(1)}%</td>
+          </tr>`).join('') : `<tr><td colspan="5" class="center muted" style="padding:20px;">Sin ventas aún</td></tr>`}</tbody>
           </table>
         </div>
       </div>
@@ -1474,6 +1807,11 @@ function renderReportes(){
       </div>
     </div>
   `;
+
+  document.getElementById('repDesde').onchange = (e)=>{ reportesFiltro.desde = e.target.value; renderReportes(); };
+  document.getElementById('repHasta').onchange = (e)=>{ reportesFiltro.hasta = e.target.value; renderReportes(); };
+  document.getElementById('repProducto').onchange = (e)=>{ reportesFiltro.perfumeId = e.target.value; renderReportes(); };
+  document.getElementById('repLimpiar').onclick = ()=>{ reportesFiltro = {desde:'', hasta:'', perfumeId:'todos'}; renderReportes(); };
 }
 
 /* ============================================================
