@@ -223,6 +223,7 @@ tr:last-child td{border-bottom:none;}
       <button class="nav-item" data-view="catalogo"><i class="ti ti-list-details"></i><span>Catálogo</span></button>
       <button class="nav-item" data-view="pedidos"><i class="ti ti-clipboard-list"></i><span>Pedidos</span></button>
       <button class="nav-item" data-view="costos"><i class="ti ti-receipt-2"></i><span>Costos</span></button>
+      <button class="nav-item" data-view="insumos"><i class="ti ti-package"></i><span>Insumos</span></button>
       <button class="nav-item" data-view="caja"><i class="ti ti-cash-banknote"></i><span>Caja</span></button>
       <button class="nav-item" data-view="reportes"><i class="ti ti-chart-bar"></i><span>Reportes</span></button>
       <button class="nav-item" data-view="config"><i class="ti ti-settings"></i><span>Configuración</span></button>
@@ -237,6 +238,7 @@ tr:last-child td{border-bottom:none;}
     <div class="view" id="view-catalogo"></div>
     <div class="view" id="view-pedidos"></div>
     <div class="view" id="view-costos"></div>
+    <div class="view" id="view-insumos"></div>
     <div class="view" id="view-caja"></div>
     <div class="view" id="view-reportes"></div>
     <div class="view" id="view-config"></div>
@@ -263,7 +265,8 @@ const defaultState = {
   ventas: [],
   turnos: [],
   pedidos: [],
-  costos: []
+  costos: [],
+  insumos: []
 };
 
 function loadState(){
@@ -325,7 +328,7 @@ async function sbPush(){
   const id = state.config.cloud.workspaceId || 'default';
   const payload = {
     id,
-    data: { perfumes: state.perfumes, ventas: state.ventas, turnos: state.turnos, pedidos: state.pedidos, costos: state.costos,
+    data: { perfumes: state.perfumes, ventas: state.ventas, turnos: state.turnos, pedidos: state.pedidos, costos: state.costos, insumos: state.insumos,
       config: { nombreNegocio: state.config.nombreNegocio, logo: state.config.logo, colorAcento: state.config.colorAcento } },
     updated_at: new Date().toISOString()
   };
@@ -344,6 +347,7 @@ function applyRemoteData(data){
   state.turnos = data.turnos || [];
   state.pedidos = data.pedidos || [];
   state.costos = data.costos || [];
+  state.insumos = data.insumos || [];
   if(data.config){
     state.config.nombreNegocio = data.config.nombreNegocio || state.config.nombreNegocio;
     state.config.logo = data.config.logo || state.config.logo;
@@ -527,6 +531,7 @@ const renderers = {
   catalogo: renderCatalogo,
   pedidos: renderPedidos,
   costos: renderCostos,
+  insumos: renderInsumos,
   caja: renderCaja,
   reportes: renderReportes,
   config: renderConfig
@@ -559,6 +564,52 @@ function ventasDeHoy(){
   const hoy = todayStr();
   return state.ventas.filter(v => v.fecha === hoy);
 }
+function activas(lista){
+  return lista.filter(v=>!v.cancelada);
+}
+
+/* ============================================================
+   CANCELAR / ELIMINAR UNA VENTA
+============================================================ */
+function restaurarStockDeVenta(v){
+  const p = state.perfumes.find(x=>x.id===v.perfumeId);
+  if(p) p.mlRestantes = +(p.mlRestantes + v.ml).toFixed(2);
+  (v.insumosConsumidos||[]).forEach(ic=>{
+    const ins = state.insumos.find(i=>i.id===ic.insumoId);
+    if(ins) ins.stockActual = +(ins.stockActual + ic.cantidad).toFixed(2);
+  });
+}
+function cancelarVenta(ventaId){
+  const v = state.ventas.find(x=>x.id===ventaId);
+  if(!v || v.cancelada) return;
+  if(!confirm(`¿Cancelar la venta de "${v.perfumeNombre}" (${money(v.total)})?\n\nSe le devolverán los mililitros e insumos al inventario. La venta queda marcada como cancelada, pero no se borra del historial.`)) return;
+  restaurarStockDeVenta(v);
+  v.cancelada = true;
+  v.canceladaEn = new Date().toISOString();
+  saveState();
+  toast('Venta cancelada, inventario devuelto', 'ok');
+  if(currentView) renderers[currentView]();
+}
+function eliminarVentaDefinitivo(ventaId){
+  const v = state.ventas.find(x=>x.id===ventaId);
+  if(!v) return;
+  if(!confirm(`¿Eliminar por completo esta venta de "${v.perfumeNombre}"?\n\nEsto la borra del historial para siempre (no solo la marca como cancelada).`)) return;
+  if(!v.cancelada) restaurarStockDeVenta(v);
+  state.ventas = state.ventas.filter(x=>x.id!==ventaId);
+  saveState();
+  toast('Venta eliminada del historial', 'ok');
+  if(currentView) renderers[currentView]();
+}
+function accionesVentaHTML(v){
+  return `<div style="display:flex;gap:6px;">
+    ${!v.cancelada ? `<button class="btn-icon" data-cancelarv="${v.id}" title="Cancelar venta"><i class="ti ti-ban"></i></button>` : ''}
+    <button class="btn-icon" data-eliminarv="${v.id}" title="Eliminar del historial"><i class="ti ti-trash"></i></button>
+  </div>`;
+}
+function wireAccionesVenta(el){
+  el.querySelectorAll('[data-cancelarv]').forEach(b=>b.onclick=()=>cancelarVenta(b.dataset.cancelarv));
+  el.querySelectorAll('[data-eliminarv]').forEach(b=>b.onclick=()=>eliminarVentaDefinitivo(b.dataset.eliminarv));
+}
 
 /* ============================================================
    DASHBOARD
@@ -566,12 +617,13 @@ function ventasDeHoy(){
 function renderDashboard(){
   const el = document.getElementById('view-dashboard');
   const turno = turnoAbierto();
-  const ventasHoy = ventasDeHoy();
+  const ventasHoy = activas(ventasDeHoy());
   const totalHoy = ventasHoy.reduce((s,v)=>s+v.total,0);
   const efectivoHoy = ventasHoy.filter(v=>v.metodoPago==='efectivo').reduce((s,v)=>s+v.total,0);
   const transferenciaHoy = ventasHoy.filter(v=>v.metodoPago==='transferencia').reduce((s,v)=>s+v.total,0);
   const bajos = state.perfumes.filter(p=>p.mlRestantes<=p.mlMinimo && p.mlRestantes>0);
   const agotados = state.perfumes.filter(p=>p.mlRestantes<=0);
+  const insumosBajos = state.insumos.filter(i=>i.stockActual<=i.stockMinimo);
 
   let alertas = '';
   if(agotados.length){
@@ -579,6 +631,9 @@ function renderDashboard(){
   }
   if(bajos.length){
     alertas += `<div class="banner"><i class="ti ti-alert-triangle"></i><div><strong>${bajos.length} perfume(s) con stock bajo:</strong> ${bajos.map(p=>p.nombre+' ('+ml(p.mlRestantes)+')').join(', ')}. Considera pedir más.</div></div>`;
+  }
+  if(insumosBajos.length){
+    alertas += `<div class="banner"><i class="ti ti-package"></i><div><strong>${insumosBajos.length} insumo(s) por acabarse:</strong> ${insumosBajos.map(i=>i.nombre).join(', ')}. Revisa la sección Insumos.</div></div>`;
   }
 
   el.innerHTML = `
@@ -800,7 +855,7 @@ function itemActualParaAgregar(){
   else if(ventaState.tipo==='completa'){ mlVendidos=disp; total=p.precioBotella; tipoLabel='Botella completa'; }
   else { mlVendidos=ventaState.mlCustom; total = ventaState.precioCustom !== undefined ? ventaState.precioCustom : precioPorMl(p)*ventaState.mlCustom; tipoLabel=`Personalizado (${mlVendidos} ml)`; }
   const stockValido = mlVendidos > 0 && mlVendidos <= disp;
-  return {p, mlVendidos, total, tipoLabel, stockValido};
+  return {p, mlVendidos, total, tipoLabel, tipoKey: ventaState.tipo, stockValido};
 }
 
 function agregarAlCarrito(){
@@ -813,6 +868,7 @@ function agregarAlCarrito(){
     perfumeId: it.p.id,
     perfumeNombre: it.p.nombre,
     tipo: it.tipoLabel,
+    tipoKey: it.tipoKey,
     ml: it.mlVendidos,
     total: it.total
   });
@@ -904,6 +960,17 @@ function confirmarVenta(){
   ventaCart.forEach(it=>{
     const p = state.perfumes.find(x=>x.id===it.perfumeId);
     p.mlRestantes = Math.max(0, +(p.mlRestantes - it.ml).toFixed(2));
+
+    // descuenta insumos asociados a este tipo de venta (empaque, etiquetas, frascos, etc.)
+    const insumosConsumidos = [];
+    state.insumos.forEach(ins=>{
+      if(ins.aplicaA === 'todos' || ins.aplicaA === it.tipoKey){
+        const cant = ins.cantidadPorVenta || 1;
+        ins.stockActual = +(ins.stockActual - cant).toFixed(2);
+        insumosConsumidos.push({insumoId: ins.id, cantidad: cant});
+      }
+    });
+
     state.ventas.push({
       id: uid('venta'),
       fecha: todayStr(),
@@ -913,16 +980,23 @@ function confirmarVenta(){
       perfumeId: it.perfumeId,
       perfumeNombre: it.perfumeNombre,
       tipo: it.tipo,
+      tipoKey: it.tipoKey,
       ml: it.ml,
       total: it.total,
       metodoPago: ventaState.metodoPago,
       recibido: ventaState.metodoPago==='efectivo' ? recibido : total,
-      cambio: cambio
+      cambio: cambio,
+      insumosConsumidos,
+      cancelada: false
     });
   });
 
+  const insumosBajosPostVenta = state.insumos.filter(i=>i.stockActual<=i.stockMinimo);
   saveState();
   toast(`Venta registrada: ${ventaCart.length} producto(s) · ${money(total)}`, 'ok');
+  if(insumosBajosPostVenta.length){
+    toast(`Insumo(s) por acabarse: ${insumosBajosPostVenta.map(i=>i.nombre).join(', ')}`, 'err');
+  }
   ventaCart = [];
   ventaState.recibido = '';
   ventaState.tipo = '5ml';
@@ -941,7 +1015,7 @@ function mesActualStr(){
 }
 function mlVendidosDelMes(mes){
   mes = mes || mesActualStr();
-  return state.ventas.filter(v=>v.fecha.slice(0,7)===mes).reduce((s,v)=>s+v.ml,0);
+  return activas(state.ventas).filter(v=>v.fecha.slice(0,7)===mes).reduce((s,v)=>s+v.ml,0);
 }
 // Reparte los costos fijos mensuales entre lo vendido este mes (ml), y suma
 // los costos variables por venta (empaque, etiquetas, etc.) a cada transacción.
@@ -958,7 +1032,7 @@ function costoVariablePorVenta(){
    INVENTARIO
 ============================================================ */
 function gananciaDePerfume(p){
-  const ventasP = state.ventas.filter(v=>v.perfumeId===p.id);
+  const ventasP = activas(state.ventas).filter(v=>v.perfumeId===p.id);
   const costoDirectoPorMl = p.mlTotal ? (p.costoBotella / p.mlTotal) : 0;
   const opPorMl = costoOperativoPorMl();
   const varPorVenta = costoVariablePorVenta();
@@ -1570,6 +1644,140 @@ function openCostoModal(costo){
 }
 
 /* ============================================================
+   INSUMOS (empaque, etiquetas, frascos... ligados a cada venta)
+============================================================ */
+const categoriasInsumo = ['Frascos y envases','Tapas','Etiquetas','Bolsas y empaque','Cajas de envío','Otro'];
+const tiposVentaInsumo = [
+  {key:'todos', label:'Cualquier venta'},
+  {key:'5ml', label:'Solo decants de 5 ml'},
+  {key:'10ml', label:'Solo decants de 10 ml'},
+  {key:'completa', label:'Solo botella completa'},
+  {key:'custom', label:'Solo cantidad personalizada'}
+];
+function labelTipoInsumo(key){
+  return (tiposVentaInsumo.find(t=>t.key===key)||tiposVentaInsumo[0]).label;
+}
+
+function renderInsumos(){
+  const el = document.getElementById('view-insumos');
+  const insumos = state.insumos.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const bajos = insumos.filter(i=>i.stockActual<=i.stockMinimo);
+  const valorInventario = insumos.reduce((s,i)=>s+(i.stockActual*i.costoUnitario),0);
+
+  el.innerHTML = `
+    <div class="page-head">
+      <div><div class="eyebrow">Insumos</div><h1>Empaque y materiales</h1><p>Frascos, tapas, etiquetas y bolsas — se descuentan solos con cada venta.</p></div>
+      <button class="btn btn-gold" id="btnNuevoInsumo"><i class="ti ti-plus"></i> Agregar insumo</button>
+    </div>
+
+    ${bajos.length ? `<div class="banner danger"><i class="ti ti-alert-triangle"></i><div><strong>${bajos.length} insumo(s) por acabarse:</strong> ${bajos.map(i=>i.nombre).join(', ')}. Pide más a tu proveedor.</div></div>` : ''}
+
+    <div class="grid grid-3" style="margin-bottom:22px;">
+      <div class="stat"><div class="label">Insumos registrados</div><div class="value">${insumos.length}</div></div>
+      <div class="stat"><div class="label">Por acabarse</div><div class="value" style="color:${bajos.length?'var(--danger)':'inherit'};">${bajos.length}</div></div>
+      <div class="stat"><div class="label">Valor en inventario</div><div class="value">${money(valorInventario)}</div></div>
+    </div>
+
+    ${insumos.length ? `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Insumo</th><th>Categoría</th><th>Se aplica a</th><th>Stock</th><th>Costo unitario</th><th></th></tr></thead>
+        <tbody>
+        ${insumos.map(i=>`<tr>
+          <td style="font-weight:700;">${i.nombre}${i.proveedor?`<div class="muted" style="font-size:11px;">Prov: ${i.proveedor}</div>`:''}</td>
+          <td>${i.categoria}</td>
+          <td class="muted" style="font-size:12.5px;">${labelTipoInsumo(i.aplicaA)} · ${i.cantidadPorVenta||1}/venta</td>
+          <td class="num" style="font-weight:700;color:${i.stockActual<=i.stockMinimo?'var(--danger)':'inherit'};">${i.stockActual} ${i.unidad}<div class="muted" style="font-size:11px;font-weight:400;">mín. ${i.stockMinimo}</div></td>
+          <td class="num">${money(i.costoUnitario)}</td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-icon" data-restocki="${i.id}" title="Reabastecer"><i class="ti ti-refresh"></i></button>
+              <button class="btn-icon" data-editi="${i.id}" title="Editar"><i class="ti ti-pencil"></i></button>
+              <button class="btn-icon" data-deli="${i.id}" title="Eliminar"><i class="ti ti-trash"></i></button>
+            </div>
+          </td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : `<div class="empty card"><i class="ti ti-package"></i><h3>Aún no registras insumos</h3><p>Agrega frascos, tapas o etiquetas para que se descuenten solos con cada venta.</p></div>`}
+  `;
+  document.getElementById('btnNuevoInsumo').onclick = ()=>openInsumoModal();
+  el.querySelectorAll('[data-editi]').forEach(b=>b.onclick=()=>openInsumoModal(state.insumos.find(i=>i.id===b.dataset.editi)));
+  el.querySelectorAll('[data-deli]').forEach(b=>b.onclick=()=>{
+    const i = state.insumos.find(x=>x.id===b.dataset.deli);
+    if(confirm(`¿Eliminar el insumo "${i.nombre}"?`)){
+      state.insumos = state.insumos.filter(x=>x.id!==i.id);
+      saveState(); renderInsumos();
+      toast('Insumo eliminado', 'ok');
+    }
+  });
+  el.querySelectorAll('[data-restocki]').forEach(b=>b.onclick=()=>{
+    const i = state.insumos.find(x=>x.id===b.dataset.restocki);
+    const nuevo = prompt(`¿Cuántas unidades de "${i.nombre}" agregarás al stock actual (${i.stockActual} ${i.unidad})?`, '0');
+    const cant = Number(nuevo);
+    if(nuevo!==null && !isNaN(cant) && cant>0){
+      i.stockActual = +(i.stockActual + cant).toFixed(2);
+      saveState(); renderInsumos();
+      toast('Stock actualizado', 'ok');
+    }
+  });
+}
+
+function openInsumoModal(insumo){
+  const editing = !!insumo;
+  const i = insumo || {id:null, nombre:'', categoria:categoriasInsumo[0], unidad:'pieza', stockActual:0, stockMinimo:10, costoUnitario:0, proveedor:'', aplicaA:'todos', cantidadPorVenta:1};
+  showModal(`
+    <div class="modal-head"><h3>${editing?'Editar':'Agregar'} insumo</h3><button class="modal-close" id="mClose">&times;</button></div>
+    <div class="field"><label>Nombre</label><input id="iNombre" value="${i.nombre}" placeholder="Ej. Frasco vidrio 5ml, Etiqueta redonda..."></div>
+    <div class="field-row">
+      <div class="field"><label>Categoría</label>
+        <select id="iCategoria">${categoriasInsumo.map(c=>`<option value="${c}" ${i.categoria===c?'selected':''}>${c}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Unidad</label><input id="iUnidad" value="${i.unidad}" placeholder="pieza, rollo, m..."></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Stock actual</label><input type="number" id="iStock" min="0" step="1" value="${i.stockActual}"></div>
+      <div class="field"><label>Alerta de stock bajo</label><input type="number" id="iMinimo" min="0" step="1" value="${i.stockMinimo}"></div>
+    </div>
+    <div class="field"><label>Costo unitario</label><input type="number" id="iCosto" min="0" step="0.1" value="${i.costoUnitario}"></div>
+    <div class="section-title">¿Con qué ventas se descuenta?</div>
+    <div class="field">
+      <label>Se aplica a</label>
+      <select id="iAplicaA">${tiposVentaInsumo.map(t=>`<option value="${t.key}" ${i.aplicaA===t.key?'selected':''}>${t.label}</option>`).join('')}</select>
+      <div class="hint">Ej. un frasco de 5ml solo se usa en decants de 5ml; una etiqueta puede aplicar a "Cualquier venta".</div>
+    </div>
+    <div class="field"><label>Cantidad que se gasta por cada venta</label><input type="number" id="iCantidadPorVenta" min="0.1" step="0.5" value="${i.cantidadPorVenta||1}"></div>
+    <div class="field"><label>Proveedor (opcional)</label><input id="iProveedor" value="${i.proveedor||''}"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="mCancel">Cancelar</button>
+      <button class="btn btn-gold" id="mSave"><i class="ti ti-check"></i> Guardar</button>
+    </div>
+  `);
+  document.getElementById('mSave').onclick = ()=>{
+    const nombre = document.getElementById('iNombre').value.trim();
+    if(!nombre){ toast('El nombre es obligatorio', 'err'); return; }
+    const data = {
+      id: i.id || uid('insumo'),
+      nombre,
+      categoria: document.getElementById('iCategoria').value,
+      unidad: document.getElementById('iUnidad').value.trim() || 'pieza',
+      stockActual: Number(document.getElementById('iStock').value)||0,
+      stockMinimo: Number(document.getElementById('iMinimo').value)||0,
+      costoUnitario: Number(document.getElementById('iCosto').value)||0,
+      aplicaA: document.getElementById('iAplicaA').value,
+      cantidadPorVenta: Number(document.getElementById('iCantidadPorVenta').value)||1,
+      proveedor: document.getElementById('iProveedor').value.trim()
+    };
+    if(editing){ Object.assign(insumo, data); } else { state.insumos.push(data); }
+    saveState();
+    closeModal();
+    toast(editing?'Insumo actualizado':'Insumo agregado', 'ok');
+    renderInsumos();
+  };
+  wireModalClose();
+}
+
+/* ============================================================
    CAJA (TURNOS)
 ============================================================ */
 function renderCaja(){
@@ -1613,8 +1821,9 @@ function renderCaja(){
   }
 
   const ventas = ventasDeTurno(turno.id);
-  const efectivo = ventas.filter(v=>v.metodoPago==='efectivo').reduce((s,v)=>s+v.total,0);
-  const transferencia = ventas.filter(v=>v.metodoPago==='transferencia').reduce((s,v)=>s+v.total,0);
+  const ventasActivas = activas(ventas);
+  const efectivo = ventasActivas.filter(v=>v.metodoPago==='efectivo').reduce((s,v)=>s+v.total,0);
+  const transferencia = ventasActivas.filter(v=>v.metodoPago==='transferencia').reduce((s,v)=>s+v.total,0);
   const totalVentas = efectivo + transferencia;
   const esperadoCaja = turno.montoInicial + efectivo;
 
@@ -1622,22 +1831,23 @@ function renderCaja(){
     <div class="page-head"><div><div class="eyebrow">Turno desde ${fmtTime(turno.horaApertura)}</div><h1>Caja abierta</h1></div></div>
     <div class="grid grid-4" style="margin-bottom:24px;">
       <div class="stat"><div class="label">Efectivo inicial</div><div class="value">${money(turno.montoInicial)}</div></div>
-      <div class="stat"><div class="label">Ventas efectivo</div><div class="value">${money(efectivo)}</div><div class="sub">${ventas.filter(v=>v.metodoPago==='efectivo').length} venta(s)</div></div>
-      <div class="stat"><div class="label">Ventas transferencia</div><div class="value">${money(transferencia)}</div><div class="sub">${ventas.filter(v=>v.metodoPago==='transferencia').length} venta(s)</div></div>
+      <div class="stat"><div class="label">Ventas efectivo</div><div class="value">${money(efectivo)}</div><div class="sub">${ventasActivas.filter(v=>v.metodoPago==='efectivo').length} venta(s)</div></div>
+      <div class="stat"><div class="label">Ventas transferencia</div><div class="value">${money(transferencia)}</div><div class="sub">${ventasActivas.filter(v=>v.metodoPago==='transferencia').length} venta(s)</div></div>
       <div class="stat accent"><div class="label">Efectivo esperado en caja</div><div class="value">${money(esperadoCaja)}</div></div>
     </div>
 
     <div class="grid grid-2" style="grid-template-columns:1fr 1fr;align-items:start;">
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Hora</th><th>Perfume</th><th>Cant.</th><th>Pago</th><th>Total</th></tr></thead>
+          <thead><tr><th>Hora</th><th>Perfume</th><th>Cant.</th><th>Pago</th><th>Total</th><th></th></tr></thead>
           <tbody>
-          ${ventas.length ? ventas.slice().reverse().map(v=>`<tr>
+          ${ventas.length ? ventas.slice().reverse().map(v=>`<tr style="${v.cancelada?'opacity:.5;':''}">
             <td>${fmtTime(v.hora)}</td><td>${v.perfumeNombre}<div class="muted" style="font-size:11px;">${v.tipo}</div></td>
             <td class="num">${ml(v.ml)}</td>
-            <td><span class="pay-badge pay-${v.metodoPago}">${v.metodoPago==='efectivo'?'Efectivo':'Transferencia'}</span></td>
-            <td class="num" style="font-weight:700;">${money(v.total)}</td>
-          </tr>`).join('') : `<tr><td colspan="5" class="center muted" style="padding:24px;">Sin ventas todavía en este turno</td></tr>`}
+            <td>${v.cancelada ? '<span class="tag tag-out">Cancelada</span>' : `<span class="pay-badge pay-${v.metodoPago}">${v.metodoPago==='efectivo'?'Efectivo':'Transferencia'}</span>`}</td>
+            <td class="num" style="font-weight:700;text-decoration:${v.cancelada?'line-through':'none'};">${money(v.total)}</td>
+            <td>${accionesVentaHTML(v)}</td>
+          </tr>`).join('') : `<tr><td colspan="6" class="center muted" style="padding:24px;">Sin ventas todavía en este turno</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -1649,6 +1859,7 @@ function renderCaja(){
       </div>
     </div>
   `;
+  wireAccionesVenta(el);
   document.getElementById('btnCerrarTurno').onclick = ()=>{
     const montoFinal = document.getElementById('montoFinal').value;
     if(montoFinal===''){ toast('Ingresa el efectivo contado', 'err'); return; }
@@ -1681,12 +1892,12 @@ function renderReportes(){
     const d = new Date(); d.setDate(d.getDate()-i);
     dias.push(d.toISOString().slice(0,10));
   }
-  const totalesPorDia = dias.map(d => state.ventas.filter(v=>v.fecha===d).reduce((s,v)=>s+v.total,0));
+  const totalesPorDia = dias.map(d => activas(state.ventas).filter(v=>v.fecha===d).reduce((s,v)=>s+v.total,0));
   const maxTotal = Math.max(1, ...totalesPorDia);
 
   const turnosCerrados = state.turnos.filter(t=>t.estado==='cerrado').slice().reverse();
-  const totalGeneral = state.ventas.reduce((s,v)=>s+v.total,0);
-  const mlTotalVendidos = state.ventas.reduce((s,v)=>s+v.ml,0);
+  const totalGeneral = activas(state.ventas).reduce((s,v)=>s+v.total,0);
+  const mlTotalVendidos = activas(state.ventas).reduce((s,v)=>s+v.ml,0);
 
   // más vendidos — con margen neto real por perfume
   const topPerfumes = state.perfumes
@@ -1695,15 +1906,15 @@ function renderReportes(){
     .sort((a,b)=>b.g.ingresos-a.g.ingresos)
     .slice(0,6);
 
-  // consulta filtrada por fecha / producto
+  // consulta filtrada por fecha / producto (se muestran también las canceladas, marcadas, pero no cuentan en los totales)
   const filtradas = state.ventas.filter(v=>{
     if(reportesFiltro.desde && v.fecha < reportesFiltro.desde) return false;
     if(reportesFiltro.hasta && v.fecha > reportesFiltro.hasta) return false;
     if(reportesFiltro.perfumeId !== 'todos' && v.perfumeId !== reportesFiltro.perfumeId) return false;
     return true;
   });
-  const ingresosFiltrados = filtradas.reduce((s,v)=>s+v.total,0);
-  const mlFiltrados = filtradas.reduce((s,v)=>s+v.ml,0);
+  const ingresosFiltrados = activas(filtradas).reduce((s,v)=>s+v.total,0);
+  const mlFiltrados = activas(filtradas).reduce((s,v)=>s+v.ml,0);
   const porDia = {};
   filtradas.forEach(v=>{ (porDia[v.fecha] = porDia[v.fecha] || []).push(v); });
   const diasConVentas = Object.keys(porDia).sort((a,b)=> new Date(b) - new Date(a));
@@ -1712,7 +1923,7 @@ function renderReportes(){
     <div class="page-head"><div><div class="eyebrow">Reportes</div><h1>Desempeño de tu negocio</h1></div></div>
 
     <div class="grid grid-3" style="margin-bottom:26px;">
-      <div class="stat"><div class="label">Ingresos totales</div><div class="value">${money(totalGeneral)}</div><div class="sub">${state.ventas.length} venta(s) registradas</div></div>
+      <div class="stat"><div class="label">Ingresos totales</div><div class="value">${money(totalGeneral)}</div><div class="sub">${activas(state.ventas).length} venta(s) registradas</div></div>
       <div class="stat"><div class="label">Mililitros vendidos</div><div class="value">${ml(mlTotalVendidos)}</div></div>
       <div class="stat"><div class="label">Turnos cerrados</div><div class="value">${turnosCerrados.length}</div></div>
     </div>
@@ -1755,8 +1966,8 @@ function renderReportes(){
 
     ${diasConVentas.length ? diasConVentas.map(fecha=>{
       const ventasDia = porDia[fecha].slice().sort((a,b)=> new Date(b.hora) - new Date(a.hora));
-      const totalDia = ventasDia.reduce((s,v)=>s+v.total,0);
-      const mlDia = ventasDia.reduce((s,v)=>s+v.ml,0);
+      const totalDia = activas(ventasDia).reduce((s,v)=>s+v.total,0);
+      const mlDia = activas(ventasDia).reduce((s,v)=>s+v.ml,0);
       return `
       <div class="card" style="margin-bottom:14px;">
         <div class="flex-between" style="margin-bottom:10px;">
@@ -1764,15 +1975,16 @@ function renderReportes(){
           <div class="num" style="font-weight:700;">${money(totalDia)} · ${ml(mlDia)}</div>
         </div>
         <table>
-          <thead><tr><th>Hora</th><th>Perfume</th><th>Tipo</th><th>ml</th><th>Pago</th><th>Total</th></tr></thead>
+          <thead><tr><th>Hora</th><th>Perfume</th><th>Tipo</th><th>ml</th><th>Pago</th><th>Total</th><th></th></tr></thead>
           <tbody>
-            ${ventasDia.map(v=>`<tr>
+            ${ventasDia.map(v=>`<tr style="${v.cancelada?'opacity:.5;':''}">
               <td>${fmtTime(v.hora)}</td>
               <td>${v.perfumeNombre}</td>
               <td class="muted" style="font-size:11.5px;">${v.tipo}</td>
               <td class="num">${ml(v.ml)}</td>
-              <td><span class="pay-badge pay-${v.metodoPago}">${v.metodoPago==='efectivo'?'Efectivo':'Transferencia'}</span></td>
-              <td class="num" style="font-weight:700;">${money(v.total)}</td>
+              <td>${v.cancelada ? '<span class="tag tag-out">Cancelada</span>' : `<span class="pay-badge pay-${v.metodoPago}">${v.metodoPago==='efectivo'?'Efectivo':'Transferencia'}</span>`}</td>
+              <td class="num" style="font-weight:700;text-decoration:${v.cancelada?'line-through':'none'};">${money(v.total)}</td>
+              <td>${accionesVentaHTML(v)}</td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -1812,6 +2024,7 @@ function renderReportes(){
   document.getElementById('repHasta').onchange = (e)=>{ reportesFiltro.hasta = e.target.value; renderReportes(); };
   document.getElementById('repProducto').onchange = (e)=>{ reportesFiltro.perfumeId = e.target.value; renderReportes(); };
   document.getElementById('repLimpiar').onclick = ()=>{ reportesFiltro = {desde:'', hasta:'', perfumeId:'todos'}; renderReportes(); };
+  wireAccionesVenta(el);
 }
 
 /* ============================================================
