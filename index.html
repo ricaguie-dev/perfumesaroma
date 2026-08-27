@@ -144,7 +144,7 @@ table{width:100%;border-collapse:collapse;font-size:13.5px;}
 th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:9px 12px;border-bottom:1.5px solid var(--border);font-weight:700;}
 td{padding:11px 12px;border-bottom:1px solid var(--border);}
 tr:last-child td{border-bottom:none;}
-.table-wrap{background:var(--paper);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.table-wrap{background:var(--paper);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;overflow-y:hidden;}
 .pay-badge{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;}
 .pay-efectivo{background:rgba(63,122,81,.13);color:var(--success);}
 .pay-transferencia{background:rgba(44,76,92,.13);color:var(--teal);}
@@ -1585,7 +1585,8 @@ function openCostoModal(costo){
     <div class="modal-head"><h3>${editing?'Editar':'Agregar'} costo</h3><button class="modal-close" id="mClose">&times;</button></div>
     <div class="field"><label>Concepto</label><input id="coConcepto" value="${c.concepto}" placeholder="Ej. Renta del local, cajas para envío..."></div>
     <div class="field"><label>Categoría</label>
-      <select id="coCategoria">${categoriasCosto.map(cat=>`<option value="${cat}" ${c.categoria===cat?'selected':''}>${cat}</option>`).join('')}</select>
+      <input id="coCategoria" list="coCategoriaList" value="${c.categoria}" placeholder="Ej. Renta, Empaque, Transporte...">
+      <datalist id="coCategoriaList">${Array.from(new Set([...categoriasCosto, ...state.costos.map(x=>x.categoria)])).map(cat=>`<option value="${cat}">`).join('')}</datalist>
     </div>
     <div class="field">
       <label>Tipo de costo</label>
@@ -1731,7 +1732,8 @@ function openInsumoModal(insumo){
     <div class="field"><label>Nombre</label><input id="iNombre" value="${i.nombre}" placeholder="Ej. Frasco vidrio 5ml, Etiqueta redonda..."></div>
     <div class="field-row">
       <div class="field"><label>Categoría</label>
-        <select id="iCategoria">${categoriasInsumo.map(c=>`<option value="${c}" ${i.categoria===c?'selected':''}>${c}</option>`).join('')}</select>
+        <input id="iCategoria" list="iCategoriaList" value="${i.categoria}" placeholder="Ej. Frascos, Etiquetas...">
+        <datalist id="iCategoriaList">${Array.from(new Set([...categoriasInsumo, ...state.insumos.map(x=>x.categoria)])).map(cat=>`<option value="${cat}">`).join('')}</datalist>
       </div>
       <div class="field"><label>Unidad</label><input id="iUnidad" value="${i.unidad}" placeholder="pieza, rollo, m..."></div>
     </div>
@@ -1974,6 +1976,7 @@ function renderReportes(){
           <div style="font-weight:700;">${fmtDate(fecha)}</div>
           <div class="num" style="font-weight:700;">${money(totalDia)} · ${ml(mlDia)}</div>
         </div>
+        <div style="overflow-x:auto;">
         <table>
           <thead><tr><th>Hora</th><th>Perfume</th><th>Tipo</th><th>ml</th><th>Pago</th><th>Total</th><th></th></tr></thead>
           <tbody>
@@ -1988,6 +1991,7 @@ function renderReportes(){
             </tr>`).join('')}
           </tbody>
         </table>
+        </div>
       </div>`;
     }).join('') : `<div class="empty card" style="margin-bottom:24px;"><i class="ti ti-calendar-search"></i><h3>Sin ventas en ese filtro</h3><p>Prueba con otro rango de fechas o producto.</p></div>`}
 
