@@ -301,6 +301,108 @@ function uid(prefix){
    SINCRONIZACIÓN EN LA NUBE (Supabase — llamadas REST directas)
 ============================================================ */
 const SB_TABLE = 'app_state';
+const SB_BUCKET = 'fotos';
+
+/* ============================================================
+   FOTOS: comprimir + subir a Supabase Storage (en vez de guardarlas
+   como texto pesado dentro del bloque de datos sincronizado)
+============================================================ */
+function comprimirImagen(file, maxSize, calidad){
+  maxSize = maxSize || 900; calidad = calidad || 0.8;
+  return new Promise((resolve)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let {width, height} = img;
+        if(width > maxSize || height > maxSize){
+          if(width > height){ height = Math.round(height * maxSize/width); width = maxSize; }
+          else { width = Math.round(width * maxSize/height); height = maxSize; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', calidad);
+      };
+      img.onerror = ()=>resolve(file);
+      img.src = e.target.result;
+    };
+    reader.onerror = ()=>resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+function blobToDataURL(blob){
+  return new Promise((resolve)=>{
+    const r = new FileReader();
+    r.onload = ()=>resolve(r.result);
+    r.readAsDataURL(blob);
+  });
+}
+function dataURLtoBlob(dataurl){
+  const arr = dataurl.split(',');
+  const mime = (arr[0].match(/:(.*?);/)||[])[1] || 'image/jpeg';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+  return new Blob([u8arr], {type: mime});
+}
+async function migrarFotosAAlmacenamiento(){
+  if(!cloudConfigured()){ toast('Conecta primero tu Supabase', 'err'); return; }
+  const btn = document.getElementById('btnMigrarFotos');
+  const esBase64 = (s)=> typeof s === 'string' && s.startsWith('data:image');
+  const pendientes = state.perfumes.filter(p=>esBase64(p.foto)).length + (esBase64(state.config.logo) ? 1 : 0);
+  if(!pendientes){ toast('No hay fotos pesadas que migrar', 'ok'); return; }
+  if(!confirm(`Se van a subir ${pendientes} foto(s) al almacenamiento de Supabase y se reemplazarán por un enlace. Esto reduce mucho el tamaño de tu base de datos. ¿Continuar?`)) return;
+
+  let migradas = 0, fallidas = 0;
+  for(const p of state.perfumes){
+    if(esBase64(p.foto)){
+      if(btn) btn.textContent = `Migrando ${migradas+fallidas+1}/${pendientes}…`;
+      try{
+        const blob = dataURLtoBlob(p.foto);
+        p.foto = await sbSubirBlob(blob, p.nombre || 'perfume');
+        migradas++;
+      }catch(err){ console.error(err); fallidas++; }
+    }
+  }
+  if(esBase64(state.config.logo)){
+    try{
+      const blob = dataURLtoBlob(state.config.logo);
+      state.config.logo = await sbSubirBlob(blob, 'logo');
+      migradas++;
+    }catch(err){ console.error(err); fallidas++; }
+  }
+
+  saveState();
+  toast(`${migradas} foto(s) migradas${fallidas ? `, ${fallidas} fallaron` : ''}`, fallidas ? 'err' : 'ok');
+  renderConfig();
+}
+async function sbSubirBlob(blob, nombreArchivo){
+  const path = `${uid('img')}-${nombreArchivo||'foto'}.jpg`;
+  const res = await fetch(`${sbBaseUrl()}/storage/v1/object/${SB_BUCKET}/${path}`, {
+    method: 'POST',
+    headers: { 'apikey': state.config.cloud.key, 'Authorization': 'Bearer ' + state.config.cloud.key, 'Content-Type': blob.type || 'image/jpeg' },
+    body: blob
+  });
+  if(!res.ok) throw new Error('No se pudo subir la foto (' + res.status + ')');
+  return `${sbBaseUrl()}/storage/v1/object/public/${SB_BUCKET}/${path}`;
+}
+// Comprime la imagen y, si hay nube conectada, la sube a Storage y devuelve
+// la URL pública; si no hay nube (o falla la subida), regresa la versión
+// local comprimida como respaldo para que la app siga funcionando offline.
+async function subirFoto(file, nombre){
+  const blob = await comprimirImagen(file);
+  const localPreview = await blobToDataURL(blob);
+  if(!cloudConfigured()) return localPreview;
+  try{
+    return await sbSubirBlob(blob, nombre);
+  }catch(err){
+    console.error(err);
+    toast('No se pudo subir la foto a la nube, se guardó solo en este dispositivo', 'err');
+    return localPreview;
+  }
+}
 let syncPushTimer = null;
 let syncPollTimer = null;
 
@@ -1148,15 +1250,12 @@ function openPhotoModal(p){
     </div>
   `);
   document.getElementById('fFotoBtn').onclick = ()=>document.getElementById('fFotoInput').click();
-  document.getElementById('fFotoInput').onchange = (e)=>{
+  document.getElementById('fFotoInput').onchange = async (e)=>{
     const file = e.target.files[0];
     if(!file) return;
-    const reader = new FileReader();
-    reader.onload = ()=>{
-      pendingFoto = reader.result;
-      document.getElementById('photoPreviewWrap').innerHTML = `<img src="${pendingFoto}" style="width:140px;height:140px;border-radius:16px;object-fit:cover;border:1px solid var(--border);">`;
-    };
-    reader.readAsDataURL(file);
+    document.getElementById('photoPreviewWrap').innerHTML = `<div style="width:140px;height:140px;border-radius:16px;background:var(--cream);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;">Subiendo…</div>`;
+    pendingFoto = await subirFoto(file, p.nombre);
+    document.getElementById('photoPreviewWrap').innerHTML = `<img src="${pendingFoto}" style="width:140px;height:140px;border-radius:16px;object-fit:cover;border:1px solid var(--border);">`;
   };
   const removeBtn = document.getElementById('fFotoRemove');
   if(removeBtn) removeBtn.onclick = ()=>{
@@ -1294,16 +1393,13 @@ function openPerfumeModal(perfume){
     </div>
   `);
   document.getElementById('fFotoBtn').onclick = ()=>document.getElementById('fFotoInput').click();
-  document.getElementById('fFotoInput').onchange = (e)=>{
+  document.getElementById('fFotoInput').onchange = async (e)=>{
     const file = e.target.files[0];
     if(!file) return;
-    const reader = new FileReader();
-    reader.onload = ()=>{
-      pendingFoto = reader.result;
-      document.getElementById('fFotoPreviewWrap').innerHTML = `<img src="${pendingFoto}" style="width:60px;height:60px;border-radius:14px;object-fit:cover;border:1px solid var(--border);">`;
-      document.getElementById('fFotoRemoveBtn').style.display = 'inline-flex';
-    };
-    reader.readAsDataURL(file);
+    document.getElementById('fFotoPreviewWrap').innerHTML = `<div style="width:60px;height:60px;border-radius:14px;background:var(--cream);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:9px;">...</div>`;
+    pendingFoto = await subirFoto(file, document.getElementById('fNombre').value || 'perfume');
+    document.getElementById('fFotoPreviewWrap').innerHTML = `<img src="${pendingFoto}" style="width:60px;height:60px;border-radius:14px;object-fit:cover;border:1px solid var(--border);">`;
+    document.getElementById('fFotoRemoveBtn').style.display = 'inline-flex';
   };
   document.getElementById('fFotoRemoveBtn').onclick = ()=>{
     pendingFoto = '';
@@ -2039,6 +2135,8 @@ const paletteOptions = ['#c69a3e','#b5677d','#2c4c5c','#4a2545','#7a8c5c','#8a5a
 
 function renderConfig(){
   const el = document.getElementById('view-config');
+  const esBase64 = (s)=> typeof s === 'string' && s.startsWith('data:image');
+  const fotosPesadasCount = state.perfumes.filter(p=>esBase64(p.foto)).length + (esBase64(state.config.logo) ? 1 : 0);
   el.innerHTML = `
     <div class="page-head"><div><div class="eyebrow">Configuración</div><h1>Tu marca</h1><p>Personaliza el nombre, logo y color de tu negocio.</p></div></div>
 
@@ -2083,6 +2181,16 @@ function renderConfig(){
       </div>
       <div class="hint" style="margin-top:10px;">${cloudConfigured() ? 'Última sincronización: ' + (state.config.cloud.lastSync ? fmtTime(state.config.cloud.lastSync) : '—') : 'Sin conexión — la app sigue funcionando normal, solo en este dispositivo.'}</div>
     </div>
+    ${fotosPesadasCount > 0 ? `
+    <div class="card" style="margin-top:16px;border-color:rgba(198,154,62,.5);">
+      <div class="flex-between" style="margin-bottom:6px;">
+        <h3 style="margin:0;">Liberar espacio: mover fotos al almacenamiento</h3>
+        <span class="tag tag-low">${fotosPesadasCount} foto(s) pesadas</span>
+      </div>
+      <p class="muted" style="font-size:13px;">Tienes ${fotosPesadasCount} foto(s) guardadas como texto dentro de tus datos — eso es lo que infla el tamaño de tu base de datos en Supabase. Este botón las sube al almacenamiento de archivos (más barato y con más espacio) y deja solo un enlace corto en su lugar.</p>
+      <button class="btn btn-gold btn-sm" id="btnMigrarFotos" ${!cloudConfigured()?'disabled':''}><i class="ti ti-cloud-upload"></i> Mover fotos al almacenamiento</button>
+      ${!cloudConfigured() ? '<div class="hint" style="margin-top:8px;">Conecta primero tu Supabase arriba.</div>' : ''}
+    </div>` : ''}
     <div class="grid grid-2" style="grid-template-columns:1fr;margin-top:16px;max-width:560px;">
       <div class="card">
         <h3 style="margin-top:0;">Respaldo de datos</h3>
@@ -2122,12 +2230,11 @@ function renderConfig(){
   let pendingColor = state.config.colorAcento;
 
   document.getElementById('cLogoBtn').onclick = ()=>document.getElementById('cLogo').click();
-  document.getElementById('cLogo').onchange = (e)=>{
+  document.getElementById('cLogo').onchange = async (e)=>{
     const file = e.target.files[0];
     if(!file) return;
-    const reader = new FileReader();
-    reader.onload = ()=>{ pendingLogo = reader.result; document.querySelector('.logo-preview').outerHTML = `<img class="logo-preview" src="${pendingLogo}">`; };
-    reader.readAsDataURL(file);
+    pendingLogo = await subirFoto(file, 'logo');
+    document.querySelector('.logo-preview').outerHTML = `<img class="logo-preview" src="${pendingLogo}">`;
   };
   const removeBtn = document.getElementById('cLogoRemove');
   if(removeBtn) removeBtn.onclick = ()=>{ pendingLogo=''; renderConfig(); };
@@ -2172,6 +2279,8 @@ function renderConfig(){
     };
     reader.readAsText(file);
   };
+  const btnMigrar = document.getElementById('btnMigrarFotos');
+  if(btnMigrar) btnMigrar.onclick = migrarFotosAAlmacenamiento;
   document.getElementById('cReset').onclick = ()=>{
     if(confirm('¿Seguro que quieres borrar TODOS los datos (perfumes, ventas y turnos)? Esta acción no se puede deshacer.')){
       state.perfumes = []; state.ventas = []; state.turnos = [];
