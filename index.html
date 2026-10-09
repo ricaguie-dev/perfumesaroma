@@ -225,6 +225,7 @@ tr:last-child td{border-bottom:none;}
       <button class="nav-item" data-view="pedidos"><i class="ti ti-clipboard-list"></i><span>Pedidos</span></button>
       <button class="nav-item" data-view="costos"><i class="ti ti-receipt-2"></i><span>Costos</span></button>
       <button class="nav-item" data-view="insumos"><i class="ti ti-package"></i><span>Insumos</span></button>
+      <button class="nav-item" data-view="historial"><i class="ti ti-history"></i><span>Historial</span></button>
       <button class="nav-item" data-view="caja"><i class="ti ti-cash-banknote"></i><span>Caja</span></button>
       <button class="nav-item" data-view="reportes"><i class="ti ti-chart-bar"></i><span>Reportes</span></button>
       <button class="nav-item" data-view="config"><i class="ti ti-settings"></i><span>Configuración</span></button>
@@ -240,6 +241,7 @@ tr:last-child td{border-bottom:none;}
     <div class="view" id="view-pedidos"></div>
     <div class="view" id="view-costos"></div>
     <div class="view" id="view-insumos"></div>
+    <div class="view" id="view-historial"></div>
     <div class="view" id="view-caja"></div>
     <div class="view" id="view-reportes"></div>
     <div class="view" id="view-config"></div>
@@ -267,7 +269,8 @@ const defaultState = {
   turnos: [],
   pedidos: [],
   costos: [],
-  insumos: []
+  insumos: [],
+  historial: []
 };
 
 function loadState(){
@@ -431,7 +434,7 @@ async function sbPush(){
   const id = state.config.cloud.workspaceId || 'default';
   const payload = {
     id,
-    data: { perfumes: state.perfumes, ventas: state.ventas, turnos: state.turnos, pedidos: state.pedidos, costos: state.costos, insumos: state.insumos,
+    data: { perfumes: state.perfumes, ventas: state.ventas, turnos: state.turnos, pedidos: state.pedidos, costos: state.costos, insumos: state.insumos, historial: state.historial,
       config: { nombreNegocio: state.config.nombreNegocio, logo: state.config.logo, colorAcento: state.config.colorAcento } },
     updated_at: new Date().toISOString()
   };
@@ -451,6 +454,7 @@ function applyRemoteData(data){
   state.pedidos = data.pedidos || [];
   state.costos = data.costos || [];
   state.insumos = data.insumos || [];
+  state.historial = data.historial || [];
   if(data.config){
     state.config.nombreNegocio = data.config.nombreNegocio || state.config.nombreNegocio;
     state.config.logo = data.config.logo || state.config.logo;
@@ -635,6 +639,7 @@ const renderers = {
   pedidos: renderPedidos,
   costos: renderCostos,
   insumos: renderInsumos,
+  historial: renderHistorial,
   caja: renderCaja,
   reportes: renderReportes,
   config: renderConfig
@@ -676,7 +681,10 @@ function activas(lista){
 ============================================================ */
 function restaurarStockDeVenta(v){
   const p = state.perfumes.find(x=>x.id===v.perfumeId);
-  if(p) p.mlRestantes = +(p.mlRestantes + v.ml).toFixed(2);
+  if(p){
+    p.mlRestantes = +(p.mlRestantes + v.ml).toFixed(2);
+    if(p.histId){ state.historial = state.historial.filter(h=>h.id!==p.histId); p.histId = null; } // la botella ya no está agotada
+  }
   (v.insumosConsumidos||[]).forEach(ic=>{
     const ins = state.insumos.find(i=>i.id===ic.insumoId);
     if(ins) ins.stockActual = +(ins.stockActual + ic.cantidad).toFixed(2);
@@ -1085,6 +1093,8 @@ function confirmarVenta(){
       tipo: it.tipo,
       tipoKey: it.tipoKey,
       ml: it.ml,
+      costoPorMl: p.mlTotal ? p.costoBotella / p.mlTotal : 0,
+      cicloId: p.cicloId || '',
       total: it.total,
       metodoPago: ventaState.metodoPago,
       recibido: ventaState.metodoPago==='efectivo' ? recibido : total,
@@ -1095,7 +1105,9 @@ function confirmarVenta(){
   });
 
   const insumosBajosPostVenta = state.insumos.filter(i=>i.stockActual<=i.stockMinimo);
+  const agotadas = archivarBotellasAgotadas(Object.keys(totalesPorPerfume));
   saveState();
+  if(agotadas.length) setTimeout(()=>toast('Botella agotada y guardada en Historial: '+agotadas.join(', '), 'ok'), 400);
   toast(`Venta registrada: ${ventaCart.length} producto(s) · ${money(total)}`, 'ok');
   if(insumosBajosPostVenta.length){
     toast(`Insumo(s) por acabarse: ${insumosBajosPostVenta.map(i=>i.nombre).join(', ')}`, 'err');
@@ -1132,17 +1144,159 @@ function costoVariablePorVenta(){
 }
 
 /* ============================================================
+   HISTORIAL DE BOTELLAS (ciclos de compra)
+   Cada vez que una botella se acaba o se reabastece, se guarda
+   una "foto" con su costo, ingresos, ganancia y fechas.
+============================================================ */
+function ventasDelCiclo(p){
+  return activas(state.ventas).filter(v=>v.perfumeId===p.id && (v.cicloId||'')===(p.cicloId||''));
+}
+function archivarCiclo(p, motivo){
+  const vs = ventasDelCiclo(p);
+  const costoPorMl = p.mlTotal ? p.costoBotella / p.mlTotal : 0;
+  const opPorMl = costoOperativoPorMl();
+  const varPorVenta = costoVariablePorVenta();
+  let ingresos = 0, costoDirecto = 0, costoOperativo = 0, mlVendidos = 0;
+  vs.forEach(v=>{
+    ingresos += v.total;
+    mlVendidos += v.ml;
+    costoDirecto += (v.costoPorMl != null ? v.costoPorMl : costoPorMl) * v.ml;
+    costoOperativo += opPorMl * v.ml + varPorVenta;
+  });
+  const fechas = vs.map(v=>v.fecha).sort();
+  const rec = {
+    id: uid('hist'),
+    perfumeId: p.id, nombre: p.nombre, marca: p.marca || '', categoria: p.categoria || '',
+    proveedor: p.proveedor || '',
+    costoBotella: p.costoBotella, mlTotal: p.mlTotal, costoPorMl,
+    mlVendidos: +mlVendidos.toFixed(2), mlSobrantes: +(p.mlRestantes||0).toFixed(2),
+    numVentas: vs.length,
+    ingresos, costoDirecto, costoOperativo,
+    gananciaBruta: ingresos - costoDirecto,
+    gananciaNeta: ingresos - costoDirecto - costoOperativo,
+    margenNeto: ingresos > 0 ? (ingresos - costoDirecto - costoOperativo) / ingresos * 100 : 0,
+    fechaInicio: p.cicloInicio || fechas[0] || todayStr(),
+    fechaFin: todayStr(),
+    motivo: motivo
+  };
+  state.historial.push(rec);
+  return rec;
+}
+// Revisa si alguna botella se acabó con esta venta y la archiva sola.
+function archivarBotellasAgotadas(perfumeIds){
+  const nombres = [];
+  perfumeIds.forEach(pid=>{
+    const p = state.perfumes.find(x=>x.id===pid);
+    if(p && p.mlRestantes <= 0 && !p.histId){
+      p.histId = archivarCiclo(p, 'agotado').id;
+      nombres.push(p.nombre);
+    }
+  });
+  return nombres;
+}
+// Reabastece: archiva el ciclo anterior (si hubo movimiento) y abre uno nuevo con el nuevo costo.
+function reabastecerBotella(p, nuevoTotal, nuevoCosto, proveedor){
+  const huboMovimiento = ventasDelCiclo(p).length > 0 || p.mlRestantes < p.mlTotal;
+  if(!p.histId && huboMovimiento) archivarCiclo(p, 'reabasto');
+  p.histId = null;
+  p.mlTotal = nuevoTotal;
+  p.mlRestantes = nuevoTotal;
+  p.costoBotella = nuevoCosto;
+  if(proveedor !== undefined) p.proveedor = proveedor;
+  p.cicloId = uid('ciclo');
+  p.cicloInicio = todayStr();
+}
+function historialDe(perfumeId){
+  return state.historial.filter(h=>h.perfumeId===perfumeId).sort((a,b)=>a.fechaFin.localeCompare(b.fechaFin));
+}
+// Variación del costo por ml contra la botella anterior del mismo perfume
+function variacionCosto(h){
+  const lista = historialDe(h.perfumeId);
+  const idx = lista.findIndex(x=>x.id===h.id);
+  if(idx <= 0) return null;
+  const prev = lista[idx-1].costoPorMl;
+  if(!prev) return null;
+  return (h.costoPorMl - prev) / prev * 100;
+}
+function variacionTag(pct){
+  if(pct === null || Math.abs(pct) < 0.05) return '<span class="muted">—</span>';
+  const sube = pct > 0;
+  return `<span class="num" style="font-weight:700;color:${sube?'var(--danger)':'var(--success)'};">${sube?'▲':'▼'} ${Math.abs(pct).toFixed(1)}%</span>`;
+}
+let histFiltro = '';
+function eliminarRegistroHistorial(id){
+  const h = state.historial.find(x=>x.id===id);
+  if(!h) return;
+  if(!confirm(`¿Eliminar del historial la botella "${h.nombre}" (${fmtDate(h.fechaFin)})?\n\nSolo borra este registro; tus ventas no se tocan.`)) return;
+  state.historial = state.historial.filter(x=>x.id!==id);
+  state.perfumes.forEach(p=>{ if(p.histId===id) p.histId = null; });
+  saveState();
+  toast('Registro eliminado', 'ok');
+  renderHistorial();
+}
+
+const SVG_TRASH = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+function renderHistorial(){
+  const el = document.getElementById('view-historial');
+  const nombres = [...new Set(state.historial.map(h=>h.perfumeId))].map(id=>{
+    const h = state.historial.find(x=>x.perfumeId===id); return {id, nombre:h.nombre};
+  }).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  if(histFiltro && !nombres.find(n=>n.id===histFiltro)) histFiltro = '';
+  const lista = state.historial.filter(h=>!histFiltro || h.perfumeId===histFiltro)
+    .slice().reverse().sort((a,b)=>b.fechaFin.localeCompare(a.fechaFin));
+  const inv = lista.reduce((s,h)=>s+h.costoBotella,0);
+  const ing = lista.reduce((s,h)=>s+h.ingresos,0);
+  const gan = lista.reduce((s,h)=>s+h.gananciaNeta,0);
+  el.innerHTML = `
+    <div class="page-head">
+      <div><div class="eyebrow">Historial</div><h1>Botellas terminadas</h1><p>Cada botella que se acaba o se reabastece queda guardada con su costo, ganancia y fechas.</p></div>
+    </div>
+    ${state.historial.length ? `
+    <div class="grid grid-3" style="margin-bottom:22px;">
+      <div class="stat"><div class="label">Botellas cerradas</div><div class="value">${lista.length}</div><div class="sub">inversión ${money(inv)}</div></div>
+      <div class="stat"><div class="label">Ingresos</div><div class="value">${money(ing)}</div></div>
+      <div class="stat accent"><div class="label">Ganancia neta</div><div class="value">${money(gan)}</div></div>
+    </div>
+    <div class="field" style="max-width:320px;"><label>Filtrar por perfume</label>
+      <select id="histFiltro"><option value="">Todos</option>${nombres.map(n=>`<option value="${n.id}" ${n.id===histFiltro?'selected':''}>${n.nombre}</option>`).join('')}</select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Perfume</th><th>Periodo</th><th>Costo botella</th><th>Costo / ml</th><th>Cambio de costo</th><th>Vendido</th><th>Ingresos</th><th>Ganancia neta</th><th>Margen</th><th></th></tr></thead>
+        <tbody>
+        ${lista.map(h=>`<tr>
+          <td style="font-weight:700;">${h.nombre}<div class="muted" style="font-size:11px;">${h.marca||''} · ${h.motivo==='agotado'?'Agotada':'Reabastecida'}${h.mlSobrantes>0?` (sobraron ${ml(h.mlSobrantes)})`:''}</div></td>
+          <td class="muted" style="font-size:12.5px;">${fmtDate(h.fechaInicio)} → ${fmtDate(h.fechaFin)}</td>
+          <td class="num">${money(h.costoBotella)}<div class="muted" style="font-size:11px;">${ml(h.mlTotal)}</div></td>
+          <td class="num">${money(h.costoPorMl)}</td>
+          <td>${variacionTag(variacionCosto(h))}</td>
+          <td class="num">${ml(h.mlVendidos)}<div class="muted" style="font-size:11px;">${h.numVentas} ventas</div></td>
+          <td class="num">${money(h.ingresos)}</td>
+          <td class="num" style="font-weight:700;color:${h.gananciaNeta<0?'var(--danger)':'var(--success)'};">${money(h.gananciaNeta)}</td>
+          <td class="num">${h.margenNeto.toFixed(1)}%</td>
+          <td><button class="btn-icon" data-delh="${h.id}" title="Eliminar registro">${SVG_TRASH}</button></td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : `<div class="empty card"><i class="ti ti-history"></i><h3>Aún no hay botellas terminadas</h3><p>Cuando un perfume llegue a 0 ml o lo reabastezcas, aparecerá aquí con su costo y ganancia.</p></div>`}
+  `;
+  const f = document.getElementById('histFiltro');
+  if(f) f.onchange = ()=>{ histFiltro = f.value; renderHistorial(); };
+  el.querySelectorAll('[data-delh]').forEach(b=>b.onclick=()=>eliminarRegistroHistorial(b.dataset.delh));
+}
+
+/* ============================================================
    INVENTARIO
 ============================================================ */
 function gananciaDePerfume(p){
-  const ventasP = activas(state.ventas).filter(v=>v.perfumeId===p.id);
+  const ventasP = ventasDelCiclo(p);
   const costoDirectoPorMl = p.mlTotal ? (p.costoBotella / p.mlTotal) : 0;
   const opPorMl = costoOperativoPorMl();
   const varPorVenta = costoVariablePorVenta();
   let ingresos = 0, costoDirecto = 0, costoOperativo = 0;
   ventasP.forEach(v=>{
     ingresos += v.total;
-    costoDirecto += costoDirectoPorMl * v.ml;
+    costoDirecto += (v.costoPorMl != null ? v.costoPorMl : costoDirectoPorMl) * v.ml;
     costoOperativo += (opPorMl * v.ml) + varPorVenta;
   });
   const gananciaBruta = ingresos - costoDirecto;
@@ -1155,8 +1309,8 @@ function gananciaDePerfume(p){
 function renderInventario(){
   const el = document.getElementById('view-inventario');
   const bajos = state.perfumes.filter(p=>p.mlRestantes<=p.mlMinimo);
-  const gananciaTotal = state.perfumes.reduce((s,p)=>s+gananciaDePerfume(p).gananciaNeta, 0);
-  const ingresoTotal = state.perfumes.reduce((s,p)=>s+gananciaDePerfume(p).ingresos, 0);
+  const gananciaTotal = state.perfumes.reduce((s,p)=>s+gananciaDePerfume(p).gananciaNeta, 0) + state.historial.reduce((s,h)=>s+h.gananciaNeta,0);
+  const ingresoTotal = state.perfumes.reduce((s,p)=>s+gananciaDePerfume(p).ingresos, 0) + state.historial.reduce((s,h)=>s+h.ingresos,0);
   const sinCostos = state.costos.length === 0;
 
   el.innerHTML = `
@@ -1198,7 +1352,7 @@ function renderInventario(){
         <div class="flex-between">${stockTag(p)}<span class="muted" style="font-size:11.5px;">${p.proveedor ? 'Prov: '+p.proveedor : ''}</span></div>
         <div class="divider"></div>
         <div class="flex-between" style="margin-bottom:4px;">
-          <span class="muted" style="font-size:12.5px;">Ganancia neta (real)</span>
+          <span class="muted" style="font-size:12.5px;">Ganancia botella actual</span>
           <span class="num" style="font-weight:700;color:${g.gananciaNeta<0?'var(--danger)':'var(--success)'};">${money(g.gananciaNeta)}</span>
         </div>
         <div class="flex-between" style="margin-bottom:4px;">
@@ -1273,22 +1427,37 @@ function openPhotoModal(p){
 }
 
 function openRestockModal(p){
+  const cpmActual = p.mlTotal ? p.costoBotella/p.mlTotal : 0;
   showModal(`
     <div class="modal-head"><h3>Reabastecer ${p.nombre}</h3><button class="modal-close" id="mClose">&times;</button></div>
-    <div class="field"><label>Mililitros totales de la nueva botella</label><input type="number" id="rNuevoTotal" value="${p.mlTotal}" min="1"></div>
-    <div class="hint" style="margin-bottom:14px;">Esto reinicia el nivel restante al total indicado.</div>
+    <div class="hint" style="margin-bottom:12px;">La botella actual se guarda en el <strong>Historial</strong> con su costo y ganancia, y empieza una nueva con el costo que indiques.</div>
+    <div class="field-row">
+      <div class="field"><label>Mililitros de la nueva botella</label><input type="number" id="rNuevoTotal" value="${p.mlTotal}" min="1"></div>
+      <div class="field"><label>Costo de compra (nuevo)</label><input type="number" id="rNuevoCosto" value="${p.costoBotella}" min="0" step="0.01"></div>
+    </div>
+    <div class="field"><label>Proveedor</label><input id="rProv" value="${p.proveedor||''}"></div>
+    <div class="hint" id="rComp" style="margin-bottom:14px;"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" id="mCancel">Cancelar</button>
       <button class="btn btn-gold" id="mSave"><i class="ti ti-check"></i> Guardar</button>
     </div>
   `);
+  const comp = ()=>{
+    const t = Number(document.getElementById('rNuevoTotal').value) || 0;
+    const c = Number(document.getElementById('rNuevoCosto').value) || 0;
+    const nuevo = t ? c/t : 0;
+    const pct = cpmActual ? (nuevo-cpmActual)/cpmActual*100 : 0;
+    document.getElementById('rComp').innerHTML = `Costo por ml: antes <strong>${money(cpmActual)}</strong> → ahora <strong>${money(nuevo)}</strong> ${Math.abs(pct)>=0.05 ? `(<span style="color:${pct>0?'var(--danger)':'var(--success)'};font-weight:700;">${pct>0?'▲ subió':'▼ bajó'} ${Math.abs(pct).toFixed(1)}%</span>)` : '(sin cambio)'}`;
+  };
+  ['rNuevoTotal','rNuevoCosto'].forEach(id=>document.getElementById(id).oninput = comp);
+  comp();
   document.getElementById('mSave').onclick = ()=>{
     const nuevoTotal = Number(document.getElementById('rNuevoTotal').value) || p.mlTotal;
-    p.mlTotal = nuevoTotal;
-    p.mlRestantes = nuevoTotal;
+    const nuevoCosto = Number(document.getElementById('rNuevoCosto').value);
+    reabastecerBotella(p, nuevoTotal, isNaN(nuevoCosto) ? p.costoBotella : nuevoCosto, document.getElementById('rProv').value.trim());
     saveState();
     closeModal();
-    toast('Inventario actualizado', 'ok');
+    toast('Reabastecido · botella anterior guardada en Historial', 'ok');
     renderInventario();
   };
   wireModalClose();
