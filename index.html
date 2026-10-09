@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mi Perfumería · Gestión de Decants</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
+<title>Mi Perfumería · Vender</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,500;1,9..144,600&family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/dist/tabler-icons.min.css">
@@ -204,46 +204,140 @@ tr:last-child td{border-bottom:none;}
 .flex-between{display:flex;justify-content:space-between;align-items:center;}
 .logo-upload{display:flex;align-items:center;gap:14px;}
 .logo-preview{width:64px;height:64px;border-radius:50%;object-fit:cover;background:var(--cream);border:1.5px solid var(--border);}
+
+/* ============================================================
+   CAPA MÓVIL — reemplaza el layout de escritorio (sidebar) por
+   topbar + navegación inferior, y adapta densidad para el dedo.
+============================================================ */
+html,body{height:100%;}
+body{overscroll-behavior-y:none;}
+input,select,textarea,button{font-size:16px;}
+.field input,.field select,.field textarea{font-size:16px;padding:12px 13px;}
+.btn,.radio-chip{min-height:44px;}
+.grid{grid-template-columns:1fr !important;}
+
+.m-app{display:flex;flex-direction:column;height:100vh;}
+.m-topbar{
+  flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:calc(12px + env(safe-area-inset-top)) 16px 12px;background:var(--ink);color:var(--cream);
+}
+.m-topbar-left{display:flex;align-items:center;gap:10px;min-width:0;}
+.m-topbar-name{font-family:'Fraunces',serif;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.m-topbar-status{font-size:11px;color:rgba(247,242,234,.65);}
+.m-back-btn{display:none;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:rgba(247,242,234,.1);border:none;color:var(--cream);flex-shrink:0;}
+.m-sync-pill{font-size:10.5px;color:rgba(247,242,234,.55);flex-shrink:0;white-space:nowrap;}
+
+#main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px 12px;position:relative;max-width:none;}
+.view{display:none;}
+.view.active{display:block;}
+
+.bottom-tabs{
+  flex-shrink:0;flex-grow:0;flex-direction:row;display:flex;background:var(--paper);border-top:1px solid var(--border);
+  padding:8px 4px calc(6px + env(safe-area-inset-bottom));
+}
+.tab-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;color:var(--muted);padding:6px 2px;border-radius:10px;}
+.tab-item.active{color:var(--ink);}
+.tab-item.active svg{color:var(--gold);}
+
+.m-header{margin-bottom:16px;}
+.m-header h1{font-size:22px;margin:0;font-weight:700;}
+
+.m-empty{text-align:center;padding:60px 24px;color:var(--muted);}
+.m-empty svg{color:var(--gold-soft);margin-bottom:12px;}
+.m-empty h3{font-family:'Fraunces',serif;color:var(--text);margin:0 0 6px;}
+.m-empty p{margin:0 0 16px;font-size:13.5px;}
+
+.m-btn-primary{
+  background:var(--ink);color:var(--cream);border:none;border-radius:999px;
+  padding:14px 20px;font-weight:700;font-size:15px;width:100%;
+}
+.m-btn-primary:disabled{opacity:.4;}
+.m-btn-inline{width:auto;padding:12px 22px;font-size:14px;}
+
+.m-pgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.m-pcard{background:var(--paper);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+.m-pcard-out{opacity:.5;}
+.m-pcard-photo{width:100%;background:var(--cream);}
+.m-pcard-body{padding:10px;}
+.m-pcard-name{font-weight:700;font-size:13.5px;line-height:1.25;margin-bottom:2px;}
+.m-pcard-disp{font-size:11.5px;color:var(--muted);margin-bottom:8px;}
+.m-chip-quick{width:100%;background:var(--ink);color:var(--cream);border:none;border-radius:9px;padding:9px 4px;font-size:12px;font-weight:700;}
+.m-chip-quick:disabled{background:var(--border);color:var(--muted);}
+
+.m-cartbar{
+  position:sticky;bottom:0;left:0;right:0;margin-top:16px;
+  background:var(--gold);border-radius:16px;padding:12px 14px;
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:0 10px 24px -8px rgba(23,19,27,.35);
+}
+.m-cartbar-count{font-size:11px;font-weight:700;color:#412402;}
+.m-cartbar-total{font-size:17px;font-weight:700;color:var(--ink);font-family:'Fraunces',serif;}
+.m-cartbar .m-btn-primary{width:auto;}
+
+.m-sheet-overlay{position:fixed;inset:0;background:rgba(23,19,27,.5);z-index:300;display:flex;align-items:flex-end;}
+.m-sheet{background:var(--paper);width:100%;border-radius:20px 20px 0 0;padding:16px 18px calc(18px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto;}
+.m-sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.m-sheet-head h3{margin:0;font-size:17px;}
+.m-sheet-close{background:var(--cream);border:none;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text);}
+.m-chip-row{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+.m-chip-lg{width:100%;text-align:left;background:var(--paper);border:1.5px solid var(--border);border-radius:12px;padding:13px 15px;font-size:14px;font-weight:600;color:var(--text);}
+.m-chip-lg.sel{background:var(--ink);color:var(--cream);border-color:var(--ink);}
+.m-chip-lg:disabled{opacity:.4;}
+.m-field{margin-bottom:14px;}
+.m-field label{display:block;font-size:12px;font-weight:700;margin-bottom:6px;}
+.m-field input{width:100%;padding:12px 13px;border:1.5px solid var(--border);border-radius:9px;background:#fff;color:var(--text);}
+.m-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.m-total-lg{font-family:'Fraunces',serif;font-size:24px;font-weight:700;}
+.m-divider{height:1px;background:var(--border);margin:14px 0;}
+.m-cart-row{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.m-cart-remove{width:28px;height:28px;flex-shrink:0;border-radius:8px;background:var(--cream);border:1px solid var(--border);color:var(--text);display:flex;align-items:center;justify-content:center;}
+.m-banner-danger{display:flex;align-items:center;gap:8px;background:rgba(179,69,63,.09);border:1px solid rgba(179,69,63,.35);color:var(--danger);border-radius:10px;padding:10px 12px;font-size:12.5px;margin:10px 0;}
+
+.m-menu-list{display:flex;flex-direction:column;gap:8px;}
+.m-menu-item{display:flex;align-items:center;gap:12px;background:var(--paper);border:1px solid var(--border);border-radius:14px;padding:14px 15px;width:100%;text-align:left;}
+.m-menu-icon{color:var(--gold);flex-shrink:0;}
+.m-menu-label{flex:1;font-weight:600;font-size:14.5px;}
+.m-menu-chevron{color:var(--muted);flex-shrink:0;}
+
+@media(min-width:520px){
+  .m-pgrid{grid-template-columns:repeat(3,1fr);}
+}
 </style>
 </head>
 <body>
-
-<div class="app">
-  <aside class="sidebar">
-    <div class="brand">
+<div class="m-app">
+  <header class="m-topbar">
+    <div class="m-topbar-left">
+      <button class="m-back-btn" id="backBtn"></button>
       <div id="brandLogoWrap"></div>
-      <div class="brand-text">
-        <div class="brand-name" id="sideBrandName">Mi Perfumería</div>
-        <div class="brand-sub">Decants</div>
+      <div style="min-width:0;">
+        <div class="m-topbar-name" id="sideBrandName">Mi Perfumería</div>
+        <div class="m-topbar-status" id="turnoStatus">Turno cerrado</div>
       </div>
     </div>
-    <nav id="navList">
-      <button class="nav-item" data-view="dashboard"><i class="ti ti-sparkles"></i><span>Inicio</span></button>
-      <button class="nav-item" data-view="venta"><i class="ti ti-shopping-cart"></i><span>Vender</span></button>
-      <button class="nav-item" data-view="inventario"><i class="ti ti-flask"></i><span>Inventario</span></button>
-      <button class="nav-item" data-view="catalogo"><i class="ti ti-list-details"></i><span>Catálogo</span></button>
-      <button class="nav-item" data-view="pedidos"><i class="ti ti-clipboard-list"></i><span>Pedidos</span></button>
-      <button class="nav-item" data-view="costos"><i class="ti ti-receipt-2"></i><span>Costos</span></button>
-      <button class="nav-item" data-view="insumos"><i class="ti ti-package"></i><span>Insumos</span></button>
-      <button class="nav-item" data-view="caja"><i class="ti ti-cash-banknote"></i><span>Caja</span></button>
-      <button class="nav-item" data-view="reportes"><i class="ti ti-chart-bar"></i><span>Reportes</span></button>
-      <button class="nav-item" data-view="config"><i class="ti ti-settings"></i><span>Configuración</span></button>
-    </nav>
-    <div class="sidebar-foot" id="syncBadge"><i class="ti ti-cloud-off"></i> Sin conexión a la nube</div>
-  </aside>
+    <div class="m-sync-pill" id="syncBadge">Sin conexión a la nube</div>
+  </header>
 
   <main id="main">
-    <div class="view" id="view-dashboard"></div>
     <div class="view" id="view-venta"></div>
     <div class="view" id="view-inventario"></div>
+    <div class="view" id="view-caja"></div>
+    <div class="view" id="view-mas"></div>
+    <div class="view" id="view-dashboard"></div>
     <div class="view" id="view-catalogo"></div>
     <div class="view" id="view-pedidos"></div>
     <div class="view" id="view-costos"></div>
     <div class="view" id="view-insumos"></div>
-    <div class="view" id="view-caja"></div>
     <div class="view" id="view-reportes"></div>
     <div class="view" id="view-config"></div>
   </main>
+
+  <nav class="bottom-tabs" id="bottomTabs">
+    <button class="tab-item" data-view="venta"></button>
+    <button class="tab-item" data-view="inventario"></button>
+    <button class="tab-item" data-view="caja"></button>
+    <button class="tab-item" data-view="mas"></button>
+  </nav>
 </div>
 
 <div id="modalRoot"></div>
@@ -253,7 +347,7 @@ tr:last-child td{border-bottom:none;}
 /* ============================================================
    ESTADO Y PERSISTENCIA
 ============================================================ */
-const STORAGE_KEY = 'decants_app_v1';
+const STORAGE_KEY = 'decants_app_mobile_v1';
 
 const defaultState = {
   config: {
@@ -295,6 +389,36 @@ function saveState(){
 
 function uid(prefix){
   return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+
+/* Íconos SVG inline — nunca dependen de una fuente externa */
+const SVG_ICONS = {
+  cart: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M3 4h2l2.2 11a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.6L21 8H6.2"/>',
+  box: '<path d="M3 9l9-5 9 5-9 5-9-5z"/><path d="M3 9v8l9 5 9-5V9"/><path d="M12 14v8"/>',
+  cash: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 6v0M18 6v0M6 18v0M18 18v0"/>',
+  dots: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+  chevronright: '<polyline points="9 6 15 12 9 18"/>',
+  chevronleft: '<polyline points="15 6 9 12 15 18"/>',
+  home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v9a1 1 0 0 0 1 1h4v-6h2v6h4a1 1 0 0 0 1-1v-9"/>',
+  list: '<line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="21" y2="18"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>',
+  clipboard: '<rect x="6" y="4" width="12" height="17" rx="2"/><rect x="9" y="2.5" width="6" height="3" rx="1"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="15" y2="15"/>',
+  receipt: '<path d="M6 3h12v18l-2.5-1.5L13 21l-2.5-1.5L8 21l-2-1.5V3z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/>',
+  chart: '<line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="12" width="3" height="8"/><rect x="11" y="7" width="3" height="13"/><rect x="16" y="3" width="3" height="17"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/>',
+  camera: '<path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>',
+  plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  pencil: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+  trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  check: '<polyline points="20 6 9 17 4 12"/>',
+  ban: '<circle cx="12" cy="12" r="9"/><line x1="5.5" y1="5.5" x2="18.5" y2="18.5"/>',
+  refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10M1 14l5.36 4.36A9 9 0 0 0 20.49 15"/>',
+  alert: '<path d="M12 3l10 18H2z"/><line x1="12" y1="10" x2="12" y2="14"/><circle cx="12" cy="17" r="0.8"/>',
+  bank: '<line x1="3" y1="21" x2="21" y2="21"/><line x1="5" y1="21" x2="5" y2="10"/><line x1="10" y1="21" x2="10" y2="10"/><line x1="14" y1="21" x2="14" y2="10"/><line x1="19" y1="21" x2="19" y2="10"/><polygon points="12 3 21 9 3 9"/>'
+};
+function svgIcon(name, size){
+  size = size || 18;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">${SVG_ICONS[name]||''}</svg>`;
 }
 
 /* ============================================================
@@ -588,6 +712,12 @@ function photoThumb(p, size){
     <i class="ti ti-camera" style="font-size:${Math.round(size*0.42)}px;"></i>
   </div>`;
 }
+function photoThumbFull(p){
+  if(p.foto){
+    return `<img src="${p.foto}" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">`;
+  }
+  return `<div style="width:100%;aspect-ratio:1;background:var(--cream);display:flex;align-items:center;justify-content:center;color:var(--muted);">${svgIcon('camera',26)}</div>`;
+}
 function bottleGauge(p, size){
   size = size || 34;
   const h = Math.round(size * 1.55);
@@ -626,7 +756,8 @@ function applyTheme(){
 /* ============================================================
    NAVEGACIÓN
 ============================================================ */
-let currentView = 'dashboard';
+let currentView = 'venta';
+const tabsPrincipales = ['venta','inventario','caja','mas'];
 const renderers = {
   dashboard: renderDashboard,
   venta: renderVenta,
@@ -637,22 +768,75 @@ const renderers = {
   insumos: renderInsumos,
   caja: renderCaja,
   reportes: renderReportes,
-  config: renderConfig
+  config: renderConfig,
+  mas: renderMas
 };
 
 function goTo(view){
   currentView = view;
-  document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+  document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active', b.dataset.view === (tabsPrincipales.includes(view) ? view : 'mas')));
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById('view-'+view).classList.add('active');
+  const backBtn = document.getElementById('backBtn');
+  if(backBtn) backBtn.style.display = tabsPrincipales.includes(view) ? 'none' : 'flex';
+  updateTopbarStatus();
   renderers[view]();
-  window.scrollTo(0,0);
+  document.getElementById('main').scrollTo(0,0);
+}
+function updateTopbarStatus(){
+  const t = turnoAbierto();
+  const elS = document.getElementById('turnoStatus');
+  if(elS) elS.innerHTML = t ? `<span style="color:var(--success);">●</span> Turno abierto` : `<span style="color:var(--muted);">●</span> Turno cerrado`;
 }
 
-document.getElementById('navList').addEventListener('click', e=>{
-  const btn = e.target.closest('.nav-item');
-  if(btn) goTo(btn.dataset.view);
+document.querySelectorAll('.tab-item[data-view]').forEach(btn=>{
+  btn.addEventListener('click', ()=>goTo(btn.dataset.view));
 });
+document.getElementById('backBtn').addEventListener('click', ()=>goTo('mas'));
+
+/* ============================================================
+   MÁS — menú de secciones secundarias
+============================================================ */
+function renderMas(){
+  const el = document.getElementById('view-mas');
+  const items = [
+    {view:'dashboard', label:'Resumen del día', icon:'home'},
+    {view:'catalogo', label:'Catálogo', icon:'list'},
+    {view:'pedidos', label:'Pedidos', icon:'clipboard'},
+    {view:'costos', label:'Costos', icon:'receipt'},
+    {view:'insumos', label:'Insumos', icon:'box'},
+    {view:'reportes', label:'Reportes', icon:'chart'},
+    {view:'config', label:'Configuración', icon:'settings'}
+  ];
+  el.innerHTML = `
+    <div class="m-header"><h1>Más</h1></div>
+    <div class="m-menu-list">
+      ${items.map(it=>`
+        <button class="m-menu-item" data-goview="${it.view}">
+          <span class="m-menu-icon">${svgIcon(it.icon,20)}</span>
+          <span class="m-menu-label">${it.label}</span>
+          <span class="m-menu-chevron">${svgIcon('chevronright',18)}</span>
+        </button>`).join('')}
+    </div>
+  `;
+  el.querySelectorAll('[data-goview]').forEach(b=>b.onclick=()=>goTo(b.dataset.goview));
+}
+
+/* ============================================================
+   BOTTOM SHEET (reemplaza modales centrados en vistas móviles clave)
+============================================================ */
+function showSheet(innerHtml){
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="m-sheet-overlay" id="sheetOverlay">
+      <div class="m-sheet">${innerHtml}</div>
+    </div>`;
+  document.getElementById('sheetOverlay').addEventListener('click', (e)=>{
+    if(e.target.id==='sheetOverlay') closeSheet();
+  });
+}
+function closeSheet(){
+  document.getElementById('modalRoot').innerHTML = '';
+}
 
 /* ============================================================
    TURNO / CAJA — helpers
@@ -828,12 +1012,12 @@ function renderVenta(){
 
   if(!turno){
     el.innerHTML = `
-      <div class="page-head"><div><div class="eyebrow">Vender</div><h1>Punto de venta</h1></div></div>
-      <div class="empty card">
-        <i class="ti ti-lock"></i>
+      <div class="m-header"><h1>Vender</h1></div>
+      <div class="m-empty">
+        ${svgIcon('bank',30)}
         <h3>Abre tu turno para empezar a vender</h3>
-        <p>Registra el efectivo con el que inicias el día antes de hacer ventas.</p>
-        <button class="btn btn-gold" style="margin-top:10px;" id="btnAbrirDesdeVenta"><i class="ti ti-cash-banknote"></i> Abrir turno</button>
+        <p>Registra el efectivo con el que inicias el día.</p>
+        <button class="m-btn-primary" id="btnAbrirDesdeVenta">Abrir turno</button>
       </div>`;
     document.getElementById('btnAbrirDesdeVenta').onclick = ()=>goTo('caja');
     return;
@@ -841,105 +1025,52 @@ function renderVenta(){
 
   if(!state.perfumes.length){
     el.innerHTML = `
-      <div class="page-head"><div><div class="eyebrow">Vender</div><h1>Punto de venta</h1></div></div>
-      <div class="empty card"><i class="ti ti-flask"></i><h3>Agrega perfumes a tu catálogo primero</h3>
-      <button class="btn btn-gold" style="margin-top:10px;" id="btnIrCatalogo"><i class="ti ti-plus"></i> Ir al catálogo</button></div>`;
+      <div class="m-header"><h1>Vender</h1></div>
+      <div class="m-empty">
+        ${svgIcon('box',30)}
+        <h3>Agrega perfumes a tu catálogo primero</h3>
+        <button class="m-btn-primary" id="btnIrCatalogo">Ir al catálogo</button>
+      </div>`;
     document.getElementById('btnIrCatalogo').onclick = ()=>goTo('catalogo');
     return;
   }
 
-  if(!ventaState.perfumeId || !state.perfumes.find(p=>p.id===ventaState.perfumeId)){
-    ventaState.perfumeId = state.perfumes.find(p=>disponible(p)>0)?.id || state.perfumes[0].id;
-  }
-  const p = state.perfumes.find(x=>x.id===ventaState.perfumeId);
-  const disp = disponible(p);
-
   el.innerHTML = `
-    <div class="page-head">
-      <div><div class="eyebrow">Turno abierto · ${fmtTime(turno.horaApertura)}</div><h1>Punto de venta</h1></div>
-    </div>
-    <div class="grid grid-2" style="align-items:start;grid-template-columns:1.15fr .85fr;">
-      <div>
-        <div class="section-title">1. Elige el perfume</div>
-        <div class="grid grid-3" id="ventaPerfumeGrid" style="grid-template-columns:repeat(3,1fr);">
-          ${state.perfumes.map(pf=>{
-            const dpf = disponible(pf);
-            return `
-            <button class="perfume-card" data-pid="${pf.id}" style="text-align:left;border:1.5px solid ${pf.id===p.id?'var(--gold)':'var(--border)'};${dpf<=0?'opacity:.45;':''}" ${dpf<=0?'disabled':''}>
-              <div class="perfume-top">
-                ${photoThumb(pf,30)}
-                ${bottleGauge(pf,24)}
-                <div style="flex:1;min-width:0;">
-                  <div class="perfume-name">${pf.nombre}</div>
-                  <div class="perfume-brand">${pf.marca||''}</div>
-                </div>
-              </div>
-              <div class="perfume-meta"><span class="perfume-ml">${ml(dpf)} disp.</span>${categoryTag(pf.categoria)}</div>
-            </button>`;}).join('')}
-        </div>
-
-        <div class="section-title">2. Tipo de venta</div>
-        <div class="card">
-          <div class="radio-row" id="tipoVentaRow">
-            <button class="radio-chip ${ventaState.tipo==='5ml'?'selected':''}" data-tipo="5ml" ${disp<5?'disabled':''}>5 ml — ${money(p.precio5ml)}</button>
-            <button class="radio-chip ${ventaState.tipo==='10ml'?'selected':''}" data-tipo="10ml" ${disp<10?'disabled':''}>10 ml — ${money(p.precio10ml)}</button>
-            <button class="radio-chip ${ventaState.tipo==='completa'?'selected':''}" data-tipo="completa" ${disp<=0?'disabled':''}>Botella completa — ${money(p.precioBotella)}</button>
-            <button class="radio-chip ${ventaState.tipo==='custom'?'selected':''}" data-tipo="custom" ${disp<=0?'disabled':''}>Cantidad personalizada</button>
+    <div class="m-header"><h1>Vender</h1></div>
+    <div class="m-pgrid">
+      ${state.perfumes.map(pf=>{
+        const dpf = disponible(pf);
+        const out = dpf<=0;
+        return `
+        <div class="m-pcard ${out?'m-pcard-out':''}" data-openpf="${pf.id}">
+          <div class="m-pcard-photo">${photoThumbFull(pf)}</div>
+          <div class="m-pcard-body">
+            <div class="m-pcard-name">${pf.nombre}</div>
+            <div class="m-pcard-disp">${out?'Agotado':ml(dpf)+' disp.'}</div>
+            <button class="m-chip-quick" data-quickadd="${pf.id}" data-tipo="5ml" ${dpf<5?'disabled':''}>5 ml · ${money(pf.precio5ml)}</button>
           </div>
-          ${ventaState.tipo==='custom' ? `
-          <div class="field-row" style="margin-top:14px;">
-            <div class="field" style="margin-bottom:0;">
-              <label>Mililitros</label>
-              <input type="number" id="mlCustomInput" min="1" max="${disp}" value="${ventaState.mlCustom}">
-            </div>
-            <div class="field" style="margin-bottom:0;">
-              <label>Precio total</label>
-              <input type="number" id="precioCustomInput" min="0" step="0.5" value="${(ventaState.precioCustom !== undefined ? ventaState.precioCustom : precioPorMl(p) * ventaState.mlCustom).toFixed(2)}">
-            </div>
-          </div>` : ''}
-          <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:14px;" id="btnAgregarCarrito"><i class="ti ti-shopping-cart-plus"></i> Agregar al carrito</button>
-        </div>
-
-        <div class="section-title">3. Método de pago</div>
-        <div class="card">
-          <div class="radio-row">
-            <button class="radio-chip ${ventaState.metodoPago==='efectivo'?'selected':''}" data-pago="efectivo"><i class="ti ti-cash"></i> Efectivo</button>
-            <button class="radio-chip ${ventaState.metodoPago==='transferencia'?'selected':''}" data-pago="transferencia"><i class="ti ti-building-bank"></i> Transferencia</button>
-          </div>
-          ${ventaState.metodoPago==='efectivo' ? `
-          <div class="field" style="margin-top:14px;max-width:220px;">
-            <label>Monto recibido</label>
-            <input type="number" id="recibidoInput" min="0" step="1" placeholder="0.00" value="${ventaState.recibido}">
-          </div>` : ''}
-        </div>
-      </div>
-
-      <div>
-        <div class="section-title">Carrito · ${ventaCart.length} producto(s)</div>
-        <div class="card" id="resumenVenta"></div>
-      </div>
+        </div>`;}).join('')}
     </div>
+    <div style="height:90px;"></div>
   `;
 
-  el.querySelectorAll('#ventaPerfumeGrid [data-pid]').forEach(btn=>{
-    btn.onclick = ()=>{ ventaState.perfumeId = btn.dataset.pid; ventaState.tipo='5ml'; ventaState.precioCustom=undefined; renderVenta(); };
+  el.querySelectorAll('[data-openpf]').forEach(card=>{
+    card.addEventListener('click', (e)=>{
+      if(e.target.closest('[data-quickadd]')) return;
+      abrirOpcionesPerfume(card.dataset.openpf);
+    });
   });
-  el.querySelectorAll('#tipoVentaRow [data-tipo]').forEach(btn=>{
-    if(btn.disabled) return;
-    btn.onclick = ()=>{ ventaState.tipo = btn.dataset.tipo; ventaState.precioCustom=undefined; if(btn.dataset.tipo==='custom'){ ventaState.mlCustom = Math.min(5, disponible(p)); } renderVenta(); };
+  el.querySelectorAll('[data-quickadd]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      ventaState.perfumeId = btn.dataset.quickadd;
+      ventaState.tipo = btn.dataset.tipo;
+      ventaState.precioCustom = undefined;
+      agregarAlCarrito();
+    });
   });
-  el.querySelectorAll('[data-pago]').forEach(btn=>{
-    btn.onclick = ()=>{ ventaState.metodoPago = btn.dataset.pago; renderVenta(); };
-  });
-  const mlCustomInput = document.getElementById('mlCustomInput');
-  if(mlCustomInput) mlCustomInput.oninput = (e)=>{ ventaState.mlCustom = Number(e.target.value)||0; ventaState.precioCustom = undefined; renderResumen(); };
-  const precioCustomInput = document.getElementById('precioCustomInput');
-  if(precioCustomInput) precioCustomInput.oninput = (e)=>{ ventaState.precioCustom = Number(e.target.value)||0; renderResumen(); };
-  const recibidoInput = document.getElementById('recibidoInput');
-  if(recibidoInput) recibidoInput.oninput = (e)=>{ ventaState.recibido = e.target.value; renderResumen(); };
-  document.getElementById('btnAgregarCarrito').onclick = agregarAlCarrito;
 
-  renderResumen();
+  renderCartBar();
 }
 
 function precioPorMl(p){
@@ -975,15 +1106,16 @@ function agregarAlCarrito(){
     ml: it.mlVendidos,
     total: it.total
   });
-  toast(`${it.p.nombre} agregado al carrito`, 'ok');
+  toast(`${it.p.nombre} agregado`, 'ok');
   ventaState.tipo = '5ml';
   ventaState.precioCustom = undefined;
-  renderVenta();
+  if(currentView==='venta') renderVenta();
 }
 
 function quitarDelCarrito(itemId){
   ventaCart = ventaCart.filter(it=>it.itemId!==itemId);
-  renderVenta();
+  renderCartBar();
+  if(document.getElementById('sheetOverlay')) abrirCarritoSheet();
 }
 
 function calcularCarrito(){
@@ -994,51 +1126,125 @@ function calcularCarrito(){
   return {total, recibido, cambio, alcanza};
 }
 
-function renderResumen(){
-  const box = document.getElementById('resumenVenta');
-  if(!box) return;
-
-  if(!ventaCart.length){
-    box.innerHTML = `<div class="empty" style="padding:26px 10px;"><i class="ti ti-shopping-cart" style="font-size:28px;color:var(--gold-soft);"></i><p class="muted" style="margin-top:8px;font-size:13px;">Agrega uno o varios perfumes al carrito para cobrar todo junto.</p></div>`;
-    return;
-  }
-
-  const {total, recibido, cambio, alcanza} = calcularCarrito();
-
-  let warn = '';
-  if(ventaState.metodoPago==='efectivo' && !alcanza && recibido>0) warn = `<div class="banner danger" style="margin:0 0 14px;"><i class="ti ti-alert-triangle"></i> El monto recibido no cubre el total.</div>`;
-
-  box.innerHTML = `
-    ${warn}
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
-      ${ventaCart.map(it=>`
-        <div class="flex-between" style="gap:8px;">
-          <div style="min-width:0;">
-            <div style="font-weight:700;font-size:13.5px;">${it.perfumeNombre}</div>
-            <div class="muted" style="font-size:11.5px;">${it.tipo} · ${ml(it.ml)}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-            <span class="num" style="font-weight:700;">${money(it.total)}</span>
-            <button class="btn-icon" data-quitar="${it.itemId}" style="width:26px;height:26px;" title="Quitar"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-          </div>
-        </div>`).join('')}
+/* ---- carrito flotante + hoja de opciones (móvil) ---- */
+function renderCartBar(){
+  const old = document.getElementById('cartBar');
+  if(old) old.remove();
+  if(!ventaCart.length) return;
+  const total = ventaCart.reduce((s,it)=>s+it.total,0);
+  const bar = document.createElement('div');
+  bar.className = 'm-cartbar';
+  bar.id = 'cartBar';
+  bar.innerHTML = `
+    <div>
+      <div class="m-cartbar-count">${ventaCart.length} producto(s)</div>
+      <div class="m-cartbar-total">${money(total)}</div>
     </div>
-    <div class="divider"></div>
-    <div class="flex-between" style="margin-bottom:8px;"><span class="muted">Total a cobrar</span><span class="qty-price" style="font-size:22px;">${money(total)}</span></div>
-    ${ventaState.metodoPago==='efectivo' ? `
-    <div class="divider"></div>
-    <div class="flex-between" style="margin-bottom:8px;"><span class="muted">Recibido</span><span class="num">${money(recibido)}</span></div>
-    <div class="flex-between"><span class="muted">Cambio</span><span class="num" style="font-weight:700;color:var(--success);">${money(cambio)}</span></div>
-    ` : `<div class="banner" style="margin-top:10px;"><i class="ti ti-building-bank"></i> Se registrará como transferencia.</div>`}
-    <button class="btn btn-gold" style="width:100%;justify-content:center;margin-top:18px;" id="btnConfirmarVenta" ${((ventaState.metodoPago==='efectivo' && !alcanza) || total<=0)?'disabled':''}>
-      <i class="ti ti-check"></i> Cobrar carrito
-    </button>
+    <button class="m-btn-primary m-btn-inline" id="btnAbrirCarrito">Cobrar</button>
   `;
-  box.querySelectorAll('[data-quitar]').forEach(btn=>{
-    btn.onclick = ()=>quitarDelCarrito(btn.dataset.quitar);
+  document.getElementById('view-venta').appendChild(bar);
+  document.getElementById('btnAbrirCarrito').onclick = abrirCarritoSheet;
+}
+
+function abrirOpcionesPerfume(perfumeId){
+  ventaState.perfumeId = perfumeId;
+  ventaState.tipo = '5ml';
+  ventaState.precioCustom = undefined;
+  renderSheetOpciones();
+}
+
+function renderSheetOpciones(){
+  const p = state.perfumes.find(x=>x.id===ventaState.perfumeId);
+  const disp = disponible(p);
+  showSheet(`
+    <div class="m-sheet-head">
+      <h3>${p.nombre}</h3>
+      <button class="m-sheet-close" id="sClose">${svgIcon('x',18)}</button>
+    </div>
+    <div class="m-sheet-body">
+      <div class="m-chip-row" id="sheetTipoRow">
+        <button class="m-chip-lg ${ventaState.tipo==='5ml'?'sel':''}" data-tipo="5ml" ${disp<5?'disabled':''}>5 ml · ${money(p.precio5ml)}</button>
+        <button class="m-chip-lg ${ventaState.tipo==='10ml'?'sel':''}" data-tipo="10ml" ${disp<10?'disabled':''}>10 ml · ${money(p.precio10ml)}</button>
+        <button class="m-chip-lg ${ventaState.tipo==='completa'?'sel':''}" data-tipo="completa" ${disp<=0?'disabled':''}>Botella completa · ${money(p.precioBotella)}</button>
+        <button class="m-chip-lg ${ventaState.tipo==='custom'?'sel':''}" data-tipo="custom" ${disp<=0?'disabled':''}>Cantidad personalizada</button>
+      </div>
+      ${ventaState.tipo==='custom' ? `
+      <div class="m-field"><label>Mililitros</label><input type="number" id="mlCustomInput" min="1" max="${disp}" value="${ventaState.mlCustom}"></div>
+      <div class="m-field"><label>Precio total</label><input type="number" id="precioCustomInput" min="0" step="0.5" value="${(ventaState.precioCustom !== undefined ? ventaState.precioCustom : precioPorMl(p) * ventaState.mlCustom).toFixed(2)}"></div>
+      ` : ''}
+      <button class="m-btn-primary" id="sheetAdd" style="width:100%;">Agregar al carrito</button>
+    </div>
+  `);
+  document.getElementById('sClose').onclick = closeSheet;
+  document.querySelectorAll('#sheetTipoRow [data-tipo]').forEach(btn=>{
+    if(btn.disabled) return;
+    btn.onclick = ()=>{ ventaState.tipo = btn.dataset.tipo; ventaState.precioCustom=undefined; if(btn.dataset.tipo==='custom'){ ventaState.mlCustom = Math.min(5, disponible(p)); } renderSheetOpciones(); };
   });
-  const btn = document.getElementById('btnConfirmarVenta');
-  if(btn) btn.onclick = confirmarVenta;
+  const mlCustomInput = document.getElementById('mlCustomInput');
+  if(mlCustomInput) mlCustomInput.oninput = (e)=>{ ventaState.mlCustom = Number(e.target.value)||0; ventaState.precioCustom = undefined; };
+  const precioCustomInput = document.getElementById('precioCustomInput');
+  if(precioCustomInput) precioCustomInput.oninput = (e)=>{ ventaState.precioCustom = Number(e.target.value)||0; };
+  document.getElementById('sheetAdd').onclick = ()=>{ agregarAlCarrito(); closeSheet(); };
+}
+
+function abrirCarritoSheet(){
+  renderCarritoSheetContent();
+}
+function renderCarritoSheetContent(){
+  if(!ventaCart.length){ closeSheet(); return; }
+  const {total, recibido, cambio, alcanza} = calcularCarrito();
+  let warn = '';
+  if(ventaState.metodoPago==='efectivo' && !alcanza && recibido>0) warn = `<div class="m-banner-danger">${svgIcon('alert',16)} El monto recibido no cubre el total.</div>`;
+
+  showSheet(`
+    <div class="m-sheet-head"><h3>Tu carrito</h3><button class="m-sheet-close" id="sClose">${svgIcon('x',18)}</button></div>
+    <div class="m-sheet-body">
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;max-height:34vh;overflow-y:auto;">
+        ${ventaCart.map(it=>`
+          <div class="m-cart-row">
+            <div style="min-width:0;">
+              <div style="font-weight:700;font-size:14px;">${it.perfumeNombre}</div>
+              <div class="muted" style="font-size:12px;">${it.tipo} · ${ml(it.ml)}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+              <span class="num" style="font-weight:700;">${money(it.total)}</span>
+              <button class="m-cart-remove" data-quitar="${it.itemId}">${svgIcon('x',14)}</button>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="m-divider"></div>
+      <div class="m-row"><span class="muted">Total a cobrar</span><span class="m-total-lg">${money(total)}</span></div>
+      <div class="m-divider"></div>
+      <div class="m-chip-row" id="pagoRow">
+        <button class="m-chip-lg ${ventaState.metodoPago==='efectivo'?'sel':''}" data-pago="efectivo">Efectivo</button>
+        <button class="m-chip-lg ${ventaState.metodoPago==='transferencia'?'sel':''}" data-pago="transferencia">Transferencia</button>
+      </div>
+      ${ventaState.metodoPago==='efectivo' ? `
+      <div class="m-field"><label>Monto recibido</label><input type="number" inputmode="decimal" id="recibidoInput" min="0" step="1" placeholder="0.00" value="${ventaState.recibido}"></div>
+      <div class="m-row"><span class="muted">Cambio</span><span class="num" id="cambioValue" style="font-weight:700;color:var(--success);font-size:17px;">${money(cambio)}</span></div>
+      ` : ''}
+      <div id="warnBox">${warn}</div>
+      <button class="m-btn-primary" id="btnConfirmarVenta" style="width:100%;margin-top:10px;" ${((ventaState.metodoPago==='efectivo' && !alcanza) || total<=0)?'disabled':''}>Confirmar venta</button>
+    </div>
+  `);
+  document.getElementById('sClose').onclick = closeSheet;
+  document.querySelectorAll('[data-quitar]').forEach(btn=>btn.onclick=()=>quitarDelCarrito(btn.dataset.quitar));
+  document.querySelectorAll('#pagoRow [data-pago]').forEach(btn=>{
+    btn.onclick = ()=>{ ventaState.metodoPago = btn.dataset.pago; renderCarritoSheetContent(); };
+  });
+  const recibidoInput = document.getElementById('recibidoInput');
+  if(recibidoInput) recibidoInput.oninput = (e)=>{
+    ventaState.recibido = e.target.value;
+    const c = calcularCarrito();
+    const cambioEl = document.getElementById('cambioValue');
+    if(cambioEl) cambioEl.textContent = money(c.cambio);
+    const warnBox = document.getElementById('warnBox');
+    if(warnBox) warnBox.innerHTML = (ventaState.metodoPago==='efectivo' && !c.alcanza && c.recibido>0) ? `<div class="m-banner-danger">${svgIcon('alert',16)} El monto recibido no cubre el total.</div>` : '';
+    const btn = document.getElementById('btnConfirmarVenta');
+    if(btn) btn.disabled = (ventaState.metodoPago==='efectivo' && !c.alcanza) || c.total<=0;
+  };
+  const btnConfirmar = document.getElementById('btnConfirmarVenta');
+  if(btnConfirmar) btnConfirmar.onclick = ()=>{ confirmarVenta(); closeSheet(); };
 }
 
 function confirmarVenta(){
@@ -2315,10 +2521,19 @@ function wireModalClose(){
 /* ============================================================
    INICIO
 ============================================================ */
+/* Rellena la barra inferior y el botón de regreso con íconos SVG inline */
+document.getElementById('backBtn').innerHTML = svgIcon('chevronleft',20);
+const tabIconMap = {venta:'cart', inventario:'box', caja:'cash', mas:'dots'};
+const tabLabelMap = {venta:'Vender', inventario:'Inventario', caja:'Caja', mas:'Más'};
+document.querySelectorAll('#bottomTabs .tab-item').forEach(btn=>{
+  const v = btn.dataset.view;
+  btn.innerHTML = `${svgIcon(tabIconMap[v],22)}<span style="font-size:10.5px;font-weight:700;">${tabLabelMap[v]}</span>`;
+});
+
 applyTheme();
 updateSyncBadge();
 if(cloudConfigured()) startCloudPolling();
-goTo('dashboard');
+goTo('venta');
 
 // Registro del service worker — solo aplica cuando la app corre en un
 // navegador servido por https (GitHub Pages, etc). En el ejecutable de
@@ -2328,6 +2543,4 @@ if('serviceWorker' in navigator && (location.protocol === 'https:' || location.h
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
   });
 }
-</script>
-</body>
-</html>
+</script></body></html>
